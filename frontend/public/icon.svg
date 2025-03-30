@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E2339;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2B3B5E;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Background with gradient -->
+  <rect width="1024" height="1024" fill="url(#grad)"/>
+  
+  <!-- Decorative circles for depth -->
+  <circle cx="200" cy="200" r="300" fill="#ffffff" fill-opacity="0.02"/>
+  <circle cx="824" cy="824" r="250" fill="#ffffff" fill-opacity="0.02"/>
+  
+  <!-- Text 'OrderMe' centered -->
+  <text x="512" y="512" 
+        font-family="Arial, sans-serif" 
+        font-size="160" 
+        font-weight="bold" 
+        fill="#ffffff" 
+        text-anchor="middle"
+        dominant-baseline="middle"
+        filter="url(#shadow)"
+        style="letter-spacing: 1px;">
+    OrderMe
+  </text>
+</svg> 

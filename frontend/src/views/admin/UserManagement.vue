@@ -1,15 +1,34 @@
 <template>
   <div class="user-management">
     <div class="header">
-      <h2>User Management</h2>
-      <button @click="showCreateModal = true" class="btn-primary">
-        <i class="fas fa-plus"></i> Create User
-      </button>
+      <div class="left-section">
+        <button class="back-btn" @click="$router.go(-1)">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
+      </div>
+      <div class="right-section">
+        <button class="btn-primary" @click="showCreateModal = true">
+          <i class="fas fa-plus"></i> Create User
+        </button>
+        <button class="btn-danger" @click="handleLogout">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <i class="fas fa-search search-icon"></i>
+      <input 
+        type="text" 
+        v-model="searchQuery" 
+        placeholder="Search users..."
+        @input="handleSearch"
+      >
     </div>
 
     <!-- Users Table -->
     <div class="table-container">
-      <table>
+      <table class="users-table" v-if="filteredUsers.length">
         <thead>
           <tr>
             <th>ID</th>
@@ -17,29 +36,31 @@
             <th>Email</th>
             <th>Role</th>
             <th>Status</th>
+            <th>Verified</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in users" :key="user.id">
+          <tr v-for="user in filteredUsers" :key="user.id">
             <td>{{ user.id }}</td>
             <td>{{ user.name }}</td>
             <td>{{ user.email }}</td>
+            <td>{{ user.role }}</td>
             <td>
-              <span class="badge" :class="roleClass(user.role)">
-                {{ user.role }}
-              </span>
-            </td>
-            <td>
-              <span class="badge" :class="user.is_active ? 'success' : 'danger'">
+              <span :class="['status-badge', user.is_active ? 'active' : 'inactive']">
                 {{ user.is_active ? 'Active' : 'Inactive' }}
               </span>
             </td>
             <td>
+              <span :class="['status-badge', user.is_verified ? 'verified' : 'unverified']">
+                {{ user.is_verified ? 'Verified' : 'Unverified' }}
+              </span>
+            </td>
+            <td class="actions">
               <button @click="editUser(user)" class="btn-icon">
                 <i class="fas fa-edit"></i>
               </button>
-              <button @click="confirmDelete(user)" class="btn-icon danger">
+              <button @click="confirmDelete(user)" class="btn-icon delete">
                 <i class="fas fa-trash"></i>
               </button>
             </td>
@@ -110,13 +131,19 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import axios from '@/utils/axios';
+import { format } from 'date-fns'
+import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 
 export default {
   name: 'UserManagement',
   setup() {
+    const router = useRouter()
+    const store = useStore()
     const users = ref([]);
+    const searchQuery = ref('');
     const showCreateModal = ref(false);
     const showDeleteModal = ref(false);
     const editingUser = ref(null);
@@ -211,36 +238,141 @@ export default {
       }[role] || 'default';
     };
 
+    const formatDate = (dateString) => {
+      if (!dateString) return '-'
+      return format(new Date(dateString), 'MMM d, yyyy HH:mm')
+    }
+
+    const handleLogout = async () => {
+      await store.dispatch('logout')
+      router.push('/signin')
+    }
+
+    const filteredUsers = computed(() => {
+      const query = searchQuery.value.toLowerCase().trim();
+      if (!query) return users.value;
+      
+      return users.value.filter(user => 
+        user.name.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        String(user.id).includes(query) ||
+        user.role.toLowerCase().includes(query)
+      );
+    });
+
+    const handleSearch = () => {
+      // The filtering is handled by the computed property
+    };
+
     onMounted(fetchUsers);
 
     return {
       users,
+      searchQuery,
       showCreateModal,
       showDeleteModal,
       editingUser,
       deletingUser,
       userForm,
-      saveUser,
-      deleteUser,
+      filteredUsers,
+      handleSearch,
       editUser,
+      saveUser,
       confirmDelete,
+      deleteUser,
       closeModal,
-      roleClass
+      handleLogout,
+      roleClass,
+      formatDate
     };
   }
 };
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
+@import '@/assets/styles/variables.scss';
+
 .user-management {
   padding: 20px;
+  color: #666;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 2rem;
+
+  .left-section {
+    .back-btn {
+      padding: 0.5rem 1rem;
+      background-color: #f0f0f0;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background-color 0.2s;
+      color: #666;
+
+      &:hover {
+        background-color: #e0e0e0;
+      }
+
+      i {
+        font-size: 0.9rem;
+      }
+    }
+  }
+
+  .right-section {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+
+    .btn-primary {
+      padding: 0.5rem 1rem;
+      background-color: $primary-color;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: darken($primary-color, 10%);
+      }
+
+      i {
+        font-size: 0.9rem;
+      }
+    }
+
+    .btn-danger {
+      padding: 0.5rem 1rem;
+      background-color: $danger-color;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: darken($danger-color, 10%);
+      }
+
+      i {
+        font-size: 0.9rem;
+      }
+    }
+  }
 }
 
 .table-container {
@@ -264,6 +396,11 @@ th, td {
 th {
   background: #f5f5f5;
   font-weight: 600;
+  color: #666;
+}
+
+td {
+  color: #666;
 }
 
 .badge {
@@ -332,33 +469,126 @@ th {
 
 .modal-content {
   background: white;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 32px;
+  border-radius: 16px;
   width: 100%;
   max-width: 500px;
+  color: #666;
+
+  h3 {
+    color: #333;
+    font-size: 1.5rem;
+    margin-bottom: 24px;
+  }
 }
 
 .form-group {
   margin-bottom: 15px;
-}
 
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-}
+  label {
+    display: block;
+    margin-bottom: 8px;
+    color: #666;
+    font-size: 1.1rem;
+  }
 
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  input,
+  select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    color: #666;
+    font-size: 1rem;
+    background-color: #fff;
+
+    &:focus {
+      outline: none;
+      border-color: #4a90e2;
+    }
+  }
+
+  input[type="checkbox"] {
+    width: auto;
+    margin-right: 8px;
+    transform: scale(1.2);
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    font-size: 1.1rem;
+  }
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 12px;
+  margin-top: 32px;
+
+  button {
+    padding: 12px 24px;
+    font-size: 1rem;
+    border-radius: 8px;
+  }
+}
+
+.status-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+
+  &.active {
+    background-color: #e6f4ea;
+    color: #1e7e34;
+  }
+
+  &.inactive {
+    background-color: #fbe9e7;
+    color: #d32f2f;
+  }
+
+  &.verified {
+    background-color: #e3f2fd;
+    color: #1976d2;
+  }
+
+  &.unverified {
+    background-color: #fff3e0;
+    color: #f57c00;
+  }
+}
+
+.search-bar {
+  position: relative;
+  margin-bottom: 2rem;
+
+  .search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+  }
+
+  input {
+    width: 100%;
+    padding: 0.8rem 1rem 0.8rem 2.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+
+    &:focus {
+      outline: none;
+      border-color: $primary-color;
+    }
+
+    &::placeholder {
+      color: #999;
+    }
+  }
 }
 </style> 

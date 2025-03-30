@@ -25,7 +25,7 @@ Route Handling:
 
 <template>
   <div id="app">
-    <main-navigation v-if="!isAdminRoute && $route.name !== 'SignIn' && $route.name !== 'SignUp'" />
+    <main-navigation v-if="!isAdminRoute && !isUserRoute && $route.name !== 'SignIn' && $route.name !== 'SignUp'" />
     <router-view />
   </div>
 </template>
@@ -43,9 +43,11 @@ export default {
   setup() {
     const route = useRoute()
     const isAdminRoute = computed(() => route.path.startsWith('/admin'))
+    const isUserRoute = computed(() => route.path.startsWith('/user'))
 
     return {
-      isAdminRoute
+      isAdminRoute,
+      isUserRoute
     }
   }
 }

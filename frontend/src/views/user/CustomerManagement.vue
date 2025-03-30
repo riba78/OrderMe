@@ -1,13 +1,23 @@
 <template>
   <div class="customer-management">
-    <div class="page-header">
-      <h1>Customer Management</h1>
-      <button class="btn-primary" @click="openAddCustomerModal">
-        <i class="fas fa-plus"></i> Add Customer
-      </button>
+    <div class="header">
+      <div class="left-section">
+        <button class="back-btn" @click="$router.go(-1)">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
+      </div>
+      <div class="right-section">
+        <button class="btn-primary create-btn" @click="openAddCustomerModal">
+          <i class="fas fa-plus"></i> Create Customer
+        </button>
+        <button class="btn-danger logout-btn" @click="handleLogout">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+      </div>
     </div>
 
     <div class="search-bar">
+      <i class="fas fa-search search-icon"></i>
       <input 
         type="text" 
         v-model="searchQuery" 
@@ -17,20 +27,21 @@
     </div>
 
     <div class="table-container">
-      <table v-if="customers.length">
+      <table v-if="filteredCustomers.length">
         <thead>
           <tr>
             <th>ID</th>
             <th>Name</th>
             <th>Email</th>
             <th>Status</th>
-            <th>Created</th>
+            <th>Verified</th>
+            <th>Created At</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="customer in customers" :key="customer.id">
-            <td>#{{ customer.id }}</td>
+          <tr v-for="customer in filteredCustomers" :key="customer.id">
+            <td>{{ customer.id }}</td>
             <td>{{ customer.name }}</td>
             <td>{{ customer.email }}</td>
             <td>
@@ -38,13 +49,18 @@
                 {{ customer.is_active ? 'Active' : 'Inactive' }}
               </span>
             </td>
+            <td>
+              <span :class="['status-badge', customer.is_verified ? 'verified' : 'unverified']">
+                {{ customer.is_verified ? 'Verified' : 'Unverified' }}
+              </span>
+            </td>
             <td>{{ formatDate(customer.created_at) }}</td>
             <td class="actions">
-              <button class="btn-icon" @click="editCustomer(customer)">
+              <button @click="editCustomer(customer)" class="btn-icon">
                 <i class="fas fa-edit"></i>
               </button>
-              <button class="btn-icon" @click="toggleCustomerStatus(customer)">
-                <i :class="['fas', customer.is_active ? 'fa-ban' : 'fa-check']"></i>
+              <button @click="confirmDelete(customer)" class="btn-icon delete">
+                <i class="fas fa-trash"></i>
               </button>
             </td>
           </tr>
@@ -54,58 +70,176 @@
         No customers found
       </div>
     </div>
+
+    <!-- Edit Customer Modal -->
+    <div v-if="showEditModal" class="modal">
+      <div class="modal-content">
+        <h2>{{ editingCustomer ? 'Edit Customer' : 'Create Customer' }}</h2>
+        <form @submit.prevent="saveCustomer">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" v-model="customerForm.name" required>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" v-model="customerForm.email" required>
+          </div>
+          <div class="form-group">
+            <label>Password {{ editingCustomer ? '(leave blank to keep unchanged)' : '' }}</label>
+            <input type="password" v-model="customerForm.password" :required="!editingCustomer">
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" v-model="customerForm.is_active">
+              Active
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
+            <button type="submit" class="btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="showDeleteModal" class="modal">
+      <div class="modal-content">
+        <h2>Delete Customer</h2>
+        <p>Are you sure you want to delete {{ deletingCustomer?.name }}?</p>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="showDeleteModal = false">Cancel</button>
+          <button class="btn-danger" @click="deleteCustomer">Delete</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import { ref, computed, onMounted } from 'vue';
+import axios from '@/utils/axios';
+import { format } from 'date-fns';
+import { useRouter } from 'vue-router';
+import { useStore } from 'vuex';
 
 export default {
   name: 'CustomerManagement',
   setup() {
+    const router = useRouter();
+    const store = useStore();
     const customers = ref([]);
     const searchQuery = ref('');
+    const showEditModal = ref(false);
+    const showDeleteModal = ref(false);
+    const editingCustomer = ref(null);
+    const deletingCustomer = ref(null);
+    const customerForm = ref({
+      name: '',
+      email: '',
+      password: '',
+      is_active: true
+    });
+
+    const filteredCustomers = computed(() => {
+      const query = searchQuery.value.toLowerCase().trim();
+      if (!query) return customers.value;
+      
+      return customers.value.filter(customer => 
+        customer.name.toLowerCase().includes(query) ||
+        customer.email.toLowerCase().includes(query) ||
+        String(customer.id).includes(query)
+      );
+    });
 
     const fetchCustomers = async () => {
       try {
-        const response = await axios.get('/api/user/customers');
+        const response = await axios.get('/user/customers');
         customers.value = response.data;
       } catch (error) {
         console.error('Error fetching customers:', error);
+        alert('Error fetching customers');
       }
+    };
+
+    const handleLogout = async () => {
+      await store.dispatch('logout');
+      router.push('/signin');
     };
 
     const handleSearch = () => {
-      // Implement search logic
-      console.log('Searching:', searchQuery.value);
+      // The filtering is now handled by the computed property
     };
 
     const openAddCustomerModal = () => {
-      // Implement add customer modal
-      console.log('Opening add customer modal');
+      editingCustomer.value = null;
+      customerForm.value = {
+        name: '',
+        email: '',
+        password: '',
+        is_active: true
+      };
+      showEditModal.value = true;
     };
 
     const editCustomer = (customer) => {
-      // Implement edit customer
-      console.log('Editing customer:', customer);
+      editingCustomer.value = customer;
+      customerForm.value = {
+        name: customer.name,
+        email: customer.email,
+        password: '',
+        is_active: customer.is_active
+      };
+      showEditModal.value = true;
     };
 
-    const toggleCustomerStatus = async (customer) => {
+    const saveCustomer = async () => {
       try {
-        await axios.patch(`/api/user/customers/${customer.id}/toggle-status`);
+        const data = { ...customerForm.value };
+        if (editingCustomer.value) {
+          if (!data.password) delete data.password;
+          await axios.put(`/user/customers/${editingCustomer.value.id}`, data);
+        } else {
+          await axios.post('/user/customers', data);
+        }
         await fetchCustomers();
+        closeModal();
       } catch (error) {
-        console.error('Error toggling customer status:', error);
+        console.error('Error saving customer:', error);
+        alert('Error saving customer');
       }
     };
 
+    const confirmDelete = (customer) => {
+      deletingCustomer.value = customer;
+      showDeleteModal.value = true;
+    };
+
+    const deleteCustomer = async () => {
+      try {
+        await axios.delete(`/user/customers/${deletingCustomer.value.id}`);
+        await fetchCustomers();
+        showDeleteModal.value = false;
+      } catch (error) {
+        console.error('Error deleting customer:', error);
+        alert('Error deleting customer');
+      }
+    };
+
+    const closeModal = () => {
+      showEditModal.value = false;
+      editingCustomer.value = null;
+      customerForm.value = {
+        name: '',
+        email: '',
+        password: '',
+        is_active: true
+      };
+    };
+
     const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
+      if (!dateString) return '-';
+      return format(new Date(dateString), 'MMM d, yyyy HH:mm');
     };
 
     onMounted(fetchCustomers);
@@ -113,75 +247,135 @@ export default {
     return {
       customers,
       searchQuery,
+      showEditModal,
+      showDeleteModal,
+      editingCustomer,
+      deletingCustomer,
+      customerForm,
+      filteredCustomers,
       handleSearch,
       openAddCustomerModal,
       editCustomer,
-      toggleCustomerStatus,
-      formatDate
+      saveCustomer,
+      confirmDelete,
+      deleteCustomer,
+      closeModal,
+      formatDate,
+      handleLogout
     };
   }
 };
 </script>
 
 <style lang="scss" scoped>
+@import '@/assets/styles/variables.scss';
+
 .customer-management {
-  padding: 1rem;
+  padding: 2rem;
+  color: #666;
 }
 
-.page-header {
+.header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
 
-  h1 {
-    font-size: 1.8rem;
-    color: #333;
+  .left-section {
+    .back-btn {
+      background: none;
+      border: none;
+      color: $primary-color;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: rgba($primary-color, 0.1);
+      }
+
+      i {
+        font-size: 1rem;
+      }
+    }
   }
-}
 
-.btn-primary {
-  background-color: $primary-color;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.3s ease;
+  .right-section {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
 
-  &:hover {
-    background-color: darken($primary-color, 10%);
-  }
+    .create-btn, .logout-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: opacity 0.2s;
 
-  i {
-    font-size: 0.9rem;
+      i {
+        font-size: 0.9rem;
+      }
+
+      &:hover {
+        opacity: 0.9;
+      }
+    }
+
+    .create-btn {
+      background-color: $primary-color;
+      color: white;
+    }
+
+    .logout-btn {
+      background-color: $danger-color;
+      color: white;
+    }
   }
 }
 
 .search-bar {
-  margin-bottom: 1.5rem;
+  position: relative;
+  margin-bottom: 2rem;
+
+  .search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+  }
 
   input {
     width: 100%;
-    max-width: 300px;
-    padding: 0.5rem 1rem;
+    padding: 0.8rem 1rem 0.8rem 2.5rem;
     border: 1px solid #ddd;
-    border-radius: 6px;
+    border-radius: 4px;
     font-size: 0.9rem;
+    transition: border-color 0.2s;
 
     &:focus {
       outline: none;
       border-color: $primary-color;
+    }
+
+    &::placeholder {
+      color: #999;
     }
   }
 }
 
 .table-container {
   background: white;
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 
@@ -196,55 +390,159 @@ export default {
     }
 
     th {
-      background: #f8f9fa;
+      background-color: #f8f9fa;
       font-weight: 600;
-      color: #666;
     }
 
-    td {
-      color: #333;
+    .actions {
+      display: flex;
+      gap: 0.5rem;
+
+      .btn-icon {
+        padding: 0.5rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        color: #666;
+        background: none;
+
+        &:hover {
+          background-color: #f0f0f0;
+        }
+
+        &.delete:hover {
+          color: $danger-color;
+          background-color: rgba($danger-color, 0.1);
+        }
+      }
     }
   }
 }
 
 .status-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.875rem;
   font-weight: 500;
 
   &.active {
-    background: #d4edda;
-    color: #155724;
+    background-color: rgba($success-color, 0.1);
+    color: $success-color;
   }
 
   &.inactive {
-    background: #f8d7da;
-    color: #721c24;
+    background-color: rgba($danger-color, 0.1);
+    color: $danger-color;
+  }
+
+  &.verified {
+    background-color: rgba($success-color, 0.1);
+    color: $success-color;
+  }
+
+  &.unverified {
+    background-color: rgba($warning-color, 0.1);
+    color: $warning-color;
   }
 }
 
-.actions {
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
-  gap: 0.5rem;
-}
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 
-.btn-icon {
-  background: none;
-  border: none;
-  padding: 0.5rem;
-  cursor: pointer;
-  color: #666;
-  transition: color 0.3s;
+  .modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 500px;
 
-  &:hover {
-    color: $primary-color;
+    h2 {
+      margin-bottom: 1.5rem;
+      color: #333;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+
+      label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #666;
+      }
+
+      input[type="text"],
+      input[type="email"],
+      input[type="password"] {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 1rem;
+
+        &:focus {
+          outline: none;
+          border-color: $primary-color;
+        }
+      }
+    }
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 2rem;
+
+    button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background-color 0.2s;
+
+      &.btn-secondary {
+        background-color: #f0f0f0;
+        color: #666;
+
+        &:hover {
+          background-color: #e0e0e0;
+        }
+      }
+
+      &.btn-primary {
+        background-color: $primary-color;
+        color: white;
+
+        &:hover {
+          background-color: darken($primary-color, 10%);
+        }
+      }
+
+      &.btn-danger {
+        background-color: $danger-color;
+        color: white;
+
+        &:hover {
+          background-color: darken($danger-color, 10%);
+        }
+      }
+    }
   }
 }
 
 .no-data {
-  text-align: center;
   padding: 2rem;
-  color: #666;
+  text-align: center;
+  color: #999;
 }
 </style> 

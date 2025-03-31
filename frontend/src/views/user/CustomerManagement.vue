@@ -7,10 +7,10 @@
         </button>
       </div>
       <div class="right-section">
-        <button class="btn-primary create-btn" @click="openAddCustomerModal">
+        <button class="btn-primary" @click="openAddCustomerModal">
           <i class="fas fa-plus"></i> Create Customer
         </button>
-        <button class="btn-danger logout-btn" @click="handleLogout">
+        <button class="btn-danger" @click="handleLogout">
           <i class="fas fa-sign-out-alt"></i> Logout
         </button>
       </div>
@@ -26,13 +26,16 @@
       >
     </div>
 
+    <!-- Customers Table -->
     <div class="table-container">
-      <table v-if="filteredCustomers.length">
+      <table class="customers-table" v-if="filteredCustomers.length">
         <thead>
           <tr>
             <th>ID</th>
             <th>Name</th>
             <th>Email</th>
+            <th>Phone</th>
+            <th>Shipping Address</th>
             <th>Status</th>
             <th>Verified</th>
             <th>Created At</th>
@@ -44,6 +47,8 @@
             <td>{{ customer.id }}</td>
             <td>{{ customer.name }}</td>
             <td>{{ customer.email }}</td>
+            <td>{{ customer.phone_number || '-' }}</td>
+            <td>{{ customer.shipping_address || '-' }}</td>
             <td>
               <span :class="['status-badge', customer.is_active ? 'active' : 'inactive']">
                 {{ customer.is_active ? 'Active' : 'Inactive' }}
@@ -71,32 +76,44 @@
       </div>
     </div>
 
-    <!-- Edit Customer Modal -->
+    <!-- Create/Edit Modal -->
     <div v-if="showEditModal" class="modal">
       <div class="modal-content">
-        <h2>{{ editingCustomer ? 'Edit Customer' : 'Create Customer' }}</h2>
+        <h3>{{ editingCustomer ? 'Edit Customer' : 'Create Customer' }}</h3>
         <form @submit.prevent="saveCustomer">
           <div class="form-group">
             <label>Name</label>
-            <input type="text" v-model="customerForm.name" required>
+            <input v-model="customerForm.name" required />
           </div>
           <div class="form-group">
             <label>Email</label>
-            <input type="email" v-model="customerForm.email" required>
+            <input v-model="customerForm.email" type="email" required />
           </div>
           <div class="form-group">
-            <label>Password {{ editingCustomer ? '(leave blank to keep unchanged)' : '' }}</label>
-            <input type="password" v-model="customerForm.password" :required="!editingCustomer">
+            <label>Phone Number</label>
+            <input v-model="customerForm.phone_number" type="tel" />
+          </div>
+          <div class="form-group">
+            <label>Shipping Address</label>
+            <textarea v-model="customerForm.shipping_address" rows="3"></textarea>
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" v-model="customerForm.is_active">
+              <input v-model="customerForm.is_active" type="checkbox" />
               Active
             </label>
           </div>
+          <div class="form-group" v-if="!editingCustomer">
+            <label>Password</label>
+            <input v-model="customerForm.password" type="password" required />
+          </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" @click="closeModal">Cancel</button>
-            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" @click="closeModal" class="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" class="btn-primary">
+              {{ editingCustomer ? 'Update' : 'Create' }}
+            </button>
           </div>
         </form>
       </div>
@@ -105,11 +122,15 @@
     <!-- Delete Confirmation Modal -->
     <div v-if="showDeleteModal" class="modal">
       <div class="modal-content">
-        <h2>Delete Customer</h2>
+        <h3>Confirm Delete</h3>
         <p>Are you sure you want to delete {{ deletingCustomer?.name }}?</p>
         <div class="modal-actions">
-          <button class="btn-secondary" @click="showDeleteModal = false">Cancel</button>
-          <button class="btn-danger" @click="deleteCustomer">Delete</button>
+          <button @click="showDeleteModal = false" class="btn-secondary">
+            Cancel
+          </button>
+          <button @click="deleteCustomer" class="btn-danger">
+            Delete
+          </button>
         </div>
       </div>
     </div>
@@ -120,13 +141,14 @@
 import { ref, computed, onMounted } from 'vue';
 import axios from '@/utils/axios';
 import { format } from 'date-fns';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useStore } from 'vuex';
 
 export default {
   name: 'CustomerManagement',
   setup() {
     const router = useRouter();
+    const route = useRoute();
     const store = useStore();
     const customers = ref([]);
     const searchQuery = ref('');
@@ -134,10 +156,14 @@ export default {
     const showDeleteModal = ref(false);
     const editingCustomer = ref(null);
     const deletingCustomer = ref(null);
+    const isAdminMode = computed(() => route.path.startsWith('/admin'));
+
     const customerForm = ref({
       name: '',
       email: '',
       password: '',
+      phone_number: '',
+      shipping_address: '',
       is_active: true
     });
 
@@ -148,17 +174,24 @@ export default {
       return customers.value.filter(customer => 
         customer.name.toLowerCase().includes(query) ||
         customer.email.toLowerCase().includes(query) ||
-        String(customer.id).includes(query)
+        String(customer.id).includes(query) ||
+        (customer.phone_number && customer.phone_number.includes(query)) ||
+        (customer.shipping_address && customer.shipping_address.toLowerCase().includes(query))
       );
     });
 
+    const getApiEndpoint = (path = '') => {
+      const base = isAdminMode.value ? '/admin/customers' : '/user/customers';
+      return path ? `${base}/${path}` : base;
+    };
+
     const fetchCustomers = async () => {
       try {
-        const response = await axios.get('/user/customers');
+        const response = await axios.get(getApiEndpoint());
         customers.value = response.data;
       } catch (error) {
         console.error('Error fetching customers:', error);
-        alert('Error fetching customers');
+        alert('Error fetching customers. Please check your database connection and try again.');
       }
     };
 
@@ -168,7 +201,7 @@ export default {
     };
 
     const handleSearch = () => {
-      // The filtering is now handled by the computed property
+      // The filtering is handled by the computed property
     };
 
     const openAddCustomerModal = () => {
@@ -177,6 +210,8 @@ export default {
         name: '',
         email: '',
         password: '',
+        phone_number: '',
+        shipping_address: '',
         is_active: true
       };
       showEditModal.value = true;
@@ -188,6 +223,8 @@ export default {
         name: customer.name,
         email: customer.email,
         password: '',
+        phone_number: customer.phone_number || '',
+        shipping_address: customer.shipping_address || '',
         is_active: customer.is_active
       };
       showEditModal.value = true;
@@ -198,15 +235,15 @@ export default {
         const data = { ...customerForm.value };
         if (editingCustomer.value) {
           if (!data.password) delete data.password;
-          await axios.put(`/user/customers/${editingCustomer.value.id}`, data);
+          await axios.put(getApiEndpoint(editingCustomer.value.id), data);
         } else {
-          await axios.post('/user/customers', data);
+          await axios.post(getApiEndpoint(), data);
         }
         await fetchCustomers();
         closeModal();
       } catch (error) {
-        console.error('Error saving customer:', error);
-        alert('Error saving customer');
+        console.error('Error saving customer:', error.response?.data || error);
+        alert(error.response?.data?.error || 'Error saving customer. Please try again.');
       }
     };
 
@@ -217,12 +254,12 @@ export default {
 
     const deleteCustomer = async () => {
       try {
-        await axios.delete(`/user/customers/${deletingCustomer.value.id}`);
+        await axios.delete(getApiEndpoint(deletingCustomer.value.id));
         await fetchCustomers();
         showDeleteModal.value = false;
       } catch (error) {
         console.error('Error deleting customer:', error);
-        alert('Error deleting customer');
+        alert('Error deleting customer. Please try again.');
       }
     };
 
@@ -233,6 +270,8 @@ export default {
         name: '',
         email: '',
         password: '',
+        phone_number: '',
+        shipping_address: '',
         is_active: true
       };
     };
@@ -271,7 +310,7 @@ export default {
 @import '@/assets/styles/variables.scss';
 
 .customer-management {
-  padding: 2rem;
+  padding: 20px;
   color: #666;
 }
 
@@ -310,7 +349,7 @@ export default {
     gap: 1rem;
     align-items: center;
 
-    .create-btn, .logout-btn {
+    .btn-primary, .btn-danger {
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -330,12 +369,12 @@ export default {
       }
     }
 
-    .create-btn {
+    .btn-primary {
       background-color: $primary-color;
       color: white;
     }
 
-    .logout-btn {
+    .btn-danger {
       background-color: $danger-color;
       color: white;
     }
@@ -465,7 +504,7 @@ export default {
     width: 100%;
     max-width: 500px;
 
-    h2 {
+    h3 {
       margin-bottom: 1.5rem;
       color: #333;
     }
@@ -481,7 +520,9 @@ export default {
 
       input[type="text"],
       input[type="email"],
-      input[type="password"] {
+      input[type="password"],
+      input[type="tel"],
+      textarea {
         width: 100%;
         padding: 0.75rem;
         border: 1px solid #ddd;
@@ -492,6 +533,11 @@ export default {
           outline: none;
           border-color: $primary-color;
         }
+      }
+
+      textarea {
+        resize: vertical;
+        min-height: 100px;
       }
     }
   }

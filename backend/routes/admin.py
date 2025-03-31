@@ -162,4 +162,72 @@ def deactivate_customer(customer_id):
     
     customer.is_active = False
     db.session.commit()
-    return jsonify(customer.to_dict()) 
+    return jsonify(customer.to_dict())
+
+@admin_bp.route('/customers/<int:customer_id>', methods=['PUT'])
+@admin_required
+def update_customer(customer_id):
+    """Update a customer's information."""
+    customer = User.query.get_or_404(customer_id)
+    if not customer.is_customer:
+        return jsonify({'error': 'User is not a customer'}), 400
+    
+    data = request.get_json()
+    
+    # Update fields
+    allowed_fields = ['name', 'email', 'is_active', 'phone_number', 'shipping_address']
+    for field in allowed_fields:
+        if field in data:
+            setattr(customer, field, data[field])
+    
+    # Update password if provided
+    if 'password' in data and data['password']:
+        customer.password_hash = generate_password_hash(data['password'])
+    
+    try:
+        db.session.commit()
+        return jsonify(customer.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error updating customer: {str(e)}'}), 500
+
+@admin_bp.route('/customers', methods=['POST'])
+@admin_required
+def create_customer():
+    """Create a new customer."""
+    data = request.get_json()
+    
+    # Validate required fields
+    required_fields = ['email', 'name', 'password']
+    if not all(field in data for field in required_fields):
+        missing_fields = [field for field in required_fields if field not in data]
+        return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+    
+    # Check if email exists
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already exists'}), 400
+    
+    try:
+        # Create customer
+        customer = User(
+            email=data['email'],
+            name=data['name'],
+            password_hash=generate_password_hash(data['password']),
+            role=UserRole.CUSTOMER,
+            is_verified=True,  # Admin-created customers are verified by default
+            is_active=data.get('is_active', True),
+            created_by_id=get_current_user().id
+        )
+        
+        # Add customer-specific fields
+        if 'phone_number' in data:
+            customer.phone_number = data['phone_number']
+        if 'shipping_address' in data:
+            customer.shipping_address = data['shipping_address']
+        
+        db.session.add(customer)
+        db.session.commit()
+        return jsonify(customer.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Error creating customer: {str(e)}'}), 500 

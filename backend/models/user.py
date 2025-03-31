@@ -47,6 +47,7 @@ class User(db.Model):
     role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), nullable=False, default=UserRole.USER)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    tin_trunk_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -61,6 +62,10 @@ class User(db.Model):
     def check_password(self, password: str) -> bool:
         """Check if the provided password matches the hash."""
         return check_password_hash(self.password_hash, password)
+
+    def update_tin_trunk_phone(self, phone: str) -> None:
+        """Update the tin trunk phone number for AI ordering."""
+        self.tin_trunk_phone = phone
 
     @property
     def is_admin(self) -> bool:
@@ -90,6 +95,7 @@ class User(db.Model):
             'role': self.role,
             'is_active': self.is_active,
             'is_verified': self.is_verified,
+            'tin_trunk_phone': self.tin_trunk_phone,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         } 

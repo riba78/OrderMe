@@ -241,4 +241,211 @@ For additional support or to report new issues:
    - Steps to reproduce
    - Error messages
    - Environment details
-   - Relevant logs 
+   - Relevant logs
+
+## Database Update Issues
+
+### 1. "Unknown column 'users.tin_trunk_phone' in 'field list'" Error
+
+**Problem**: When trying to run the application or perform database migrations, you encounter an error indicating that the `tin_trunk_phone` column is missing from the `users` table.
+
+**Symptoms**:
+- Error message: "Unknown column 'users.tin_trunk_phone' in 'field list'"
+- Application fails to start
+- Database migration fails
+- SQLAlchemy queries fail when accessing the new column
+
+**Cause**:
+The error occurs because the database schema is out of sync with the application models. This can happen when:
+1. New columns are added to models but not to the database
+2. Database migrations are not properly applied
+3. Direct database changes are made without updating the models
+
+**Solution**:
+1. First, ensure MySQL server is running:
+   ```bash
+   sudo service mysql status  # On Linux
+   brew services list        # On macOS
+   ```
+
+2. Apply the database changes using one of these methods:
+
+   a. Using the SQL script:
+   ```bash
+   mysql -u orderme_user -p orderme < backend/add_phone_columns.sql
+   ```
+
+   b. Using Flask-Migrate:
+   ```bash
+   cd backend
+   flask db upgrade
+   ```
+
+3. If the above methods fail, manually execute the SQL commands:
+   ```sql
+   ALTER TABLE users
+   ADD COLUMN IF NOT EXISTS tin_trunk_phone VARCHAR(20) NULL;
+
+   ALTER TABLE customers
+   ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20) NULL;
+   ```
+
+**Prevention**:
+- Always run database migrations when adding new columns
+- Keep database schema in sync with models
+- Use version control for database changes
+- Test migrations in development before applying to production
+
+### 2. Database Connection Issues
+
+**Problem**: Unable to connect to MySQL database during migrations or application startup.
+
+**Symptoms**:
+- Error: "Can't connect to local MySQL server through socket '/tmp/mysql.sock'"
+- Migration commands fail
+- Application fails to start
+
+**Cause**:
+- MySQL server not running
+- Incorrect database credentials
+- Wrong database host or port
+- Socket file location mismatch
+
+**Solution**:
+1. Check MySQL server status:
+   ```bash
+   sudo service mysql status  # On Linux
+   brew services list        # On macOS
+   ```
+
+2. Verify database connection settings in `.env`:
+   ```
+   DATABASE_URL=mysql+pymysql://orderme_user:password@127.0.0.1:3306/orderme
+   ```
+
+3. Ensure MySQL user has proper permissions:
+   ```sql
+   GRANT ALL PRIVILEGES ON orderme.* TO 'orderme_user'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
+
+**Prevention**:
+- Document database setup requirements
+- Use environment variables for database configuration
+- Implement proper error handling for database connections
+- Keep database credentials secure
+
+## Database Structure Issues
+
+### 1. Missing Customer Fields in Database
+
+**Problem**: The customers table in the database doesn't contain all the fields defined in the Customer model class.
+
+**Symptoms**:
+- Only basic fields (id, shipping_address, phone_number) visible in customers table
+- Missing payment-related fields
+- Missing user-related fields
+
+**Cause**:
+This is by design due to SQLAlchemy's polymorphic inheritance and relationship structure:
+1. Basic user fields (email, name, etc.) are stored in the `users` table due to inheritance
+2. Payment-related fields are stored in separate tables (`payment_methods` and `payment_info`)
+3. Relationships are managed through foreign keys, not direct columns
+
+**Database Structure**:
+```sql
+-- Users table (parent table)
+CREATE TABLE users (
+    id INT PRIMARY KEY,
+    email VARCHAR(120) UNIQUE NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    tin_trunk_phone VARCHAR(20) NULL,
+    type VARCHAR(50) NULL,  -- Discriminator column for inheritance
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+-- Customers table (child table)
+CREATE TABLE customers (
+    id INT PRIMARY KEY,
+    shipping_address TEXT NULL,
+    phone_number VARCHAR(20) NULL,
+    FOREIGN KEY (id) REFERENCES users(id)
+);
+
+-- Payment Methods table (relationship table)
+CREATE TABLE payment_methods (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    provider VARCHAR(50) NOT NULL,
+    last_four VARCHAR(4) NOT NULL,
+    expiry_date DATETIME NULL,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES users(id)
+);
+
+-- Payment Info table (relationship table)
+CREATE TABLE payment_info (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    billing_address TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES users(id)
+);
+```
+
+**Solution**:
+1. Run the database migration to create all necessary tables:
+   ```bash
+   cd backend
+   flask db upgrade
+   ```
+
+2. If migration fails, manually execute the SQL commands:
+   ```sql
+   -- Add type column to users table
+   ALTER TABLE users
+   ADD COLUMN IF NOT EXISTS type VARCHAR(50) NULL;
+
+   -- Create customers table
+   CREATE TABLE IF NOT EXISTS customers (
+       id INT PRIMARY KEY,
+       shipping_address TEXT NULL,
+       phone_number VARCHAR(20) NULL,
+       FOREIGN KEY (id) REFERENCES users(id) ON DELETE CASCADE
+   );
+
+   -- Create payment_methods table
+   CREATE TABLE IF NOT EXISTS payment_methods (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       customer_id INT NOT NULL,
+       type VARCHAR(50) NOT NULL,
+       provider VARCHAR(50) NOT NULL,
+       last_four VARCHAR(4) NOT NULL,
+       expiry_date DATETIME NULL,
+       is_default BOOLEAN DEFAULT FALSE,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
+   );
+
+   -- Create payment_info table
+   CREATE TABLE IF NOT EXISTS payment_info (
+       id INT AUTO_INCREMENT PRIMARY KEY,
+       customer_id INT NOT NULL,
+       billing_address TEXT NOT NULL,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
+   );
+   ```
+
+**Prevention**:
+- Understand SQLAlchemy's inheritance patterns
+- Keep database schema documentation up to date
+- Use proper migrations for schema changes
+- Test relationships and queries after schema changes 

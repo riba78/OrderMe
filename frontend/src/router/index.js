@@ -140,6 +140,11 @@ const routes = [
         path: 'users',
         name: 'UserManagement',
         component: UserManagement
+      },
+      {
+        path: 'customers',
+        name: 'AdminCustomerManagement',
+        component: () => import('@/views/user/CustomerManagement.vue')
       }
     ]
   },

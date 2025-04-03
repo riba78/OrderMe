@@ -84,15 +84,16 @@ def create_admin_user():
 def create_app():
     app = Flask(__name__)
     
-    # Configure CORS with more permissive settings for development
-    CORS(app, 
-         resources={r"/api/*": {
-             "origins": ["http://localhost:8080", "http://127.0.0.1:8080"],
-             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-             "allow_headers": ["Content-Type", "Authorization"],
-             "supports_credentials": True,
-             "expose_headers": ["Content-Type", "Authorization"]
-         }})
+    # Configure CORS properly
+    CORS(app, resources={
+        r"/api/*": {  # This will cover both /api/auth and /api/admin routes
+            "origins": ["http://localhost:8080"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
+    })
 
     # Configure SQLAlchemy
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
@@ -108,6 +109,14 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8080')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
     with app.app_context():
         # Create database tables
         db.create_all()
@@ -119,4 +128,4 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(host='0.0.0.0', port=5001, debug=True) 

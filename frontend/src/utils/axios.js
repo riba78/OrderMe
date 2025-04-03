@@ -27,10 +27,12 @@ import router from '@/router';
 
 // Create axios instance with base URL
 const instance = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: 'http://localhost:5001/api',
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
   },
+  withCredentials: true,
   timeout: 10000 // 10 second timeout
 });
 
@@ -41,6 +43,7 @@ instance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.withCredentials = true;
     return config;
   },
   (error) => Promise.reject(error)

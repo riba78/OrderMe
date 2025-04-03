@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import request, jsonify, g
 import jwt
-from models import User
+from models.user import User
 from config import Settings
 
 settings = Settings()

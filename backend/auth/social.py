@@ -28,7 +28,8 @@ from google.auth.transport import requests as google_requests
 import jwt
 from datetime import datetime, timedelta
 
-from models import User, db
+from models.user import User
+from extensions import db
 from config import settings
 
 class SocialAuthHandler:

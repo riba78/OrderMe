@@ -38,34 +38,6 @@ import { createStore } from 'vuex'
 import axios from '@/utils/axios'  // Use our configured axios instance
 import router from '@/router'
 
-// Configure axios defaults
-axios.defaults.baseURL = `${process.env.VUE_APP_API_URL || 'http://localhost:5000'}/api`
-axios.defaults.withCredentials = true
-axios.defaults.headers.common['Content-Type'] = 'application/json'
-
-// Add token to requests
-axios.interceptors.request.use(request => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    request.headers.Authorization = `Bearer ${token}`
-  }
-  return request
-}, error => {
-  return Promise.reject(error)
-})
-
-// Handle response errors
-axios.interceptors.response.use(
-  response => response,
-  error => {
-    if (error.response?.status === 401) {
-      store.dispatch('logout')
-      router.push('/signin')
-    }
-    return Promise.reject(error)
-  }
-)
-
 const store = createStore({
   state: {
     user: JSON.parse(localStorage.getItem('user')) || null,

@@ -59,7 +59,8 @@ with both traditional and social authentication methods.
 
 from flask import Blueprint, request, jsonify
 from auth.social import SocialAuthHandler
-from models import User, db
+from models.user import User
+from extensions import db
 from models.user import UserRole
 from config import settings
 from datetime import datetime

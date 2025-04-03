@@ -55,17 +55,48 @@ export default {
 
     const fetchStats = async () => {
       try {
+        const token = localStorage.getItem('token');
+        console.log('Token:', token); // Debug log
+
+        if (!token) {
+          console.error('No token found');
+          router.push('/signin');
+          return;
+        }
+
+        const config = {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          withCredentials: true
+        };
+
+        console.log('Making requests with config:', config); // Debug log
+
         const [usersRes, customersRes] = await Promise.all([
-          axios.get('/admin/users'),
-          axios.get('/admin/customers')
+          axios.get('/api/admin/users', config),
+          axios.get('/api/admin/customers', config)
         ]);
-        
+
+        console.log('Users response:', usersRes.data);
+        console.log('Customers response:', customersRes.data);
+
         stats.value = {
           totalUsers: usersRes.data.length,
           activeCustomers: customersRes.data.filter(c => c.is_active).length
         };
       } catch (error) {
-        console.error('Error fetching stats:', error);
+        console.error('Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          headers: error.response?.headers
+        });
+
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          router.push('/signin');
+        }
       }
     };
 

@@ -132,15 +132,23 @@ export default {
 
       loading.value = true
       try {
-        await store.dispatch('login', {
+        console.log('Attempting login with:', {
           email: form.email,
           password: form.password,
           rememberMe: form.rememberMe
-        })
+        });
+        
+        const response = await store.dispatch('login', {
+          email: form.email,
+          password: form.password,
+          rememberMe: form.rememberMe
+        });
+        console.log('Login response:', response);
       } catch (error) {
-        errors.email = error.response?.data?.message || 'Invalid credentials'
+        console.error('Login error:', error);
+        errors.email = error.response?.data?.message || 'Invalid credentials';
       } finally {
-        loading.value = false
+        loading.value = false;
       }
     }
 

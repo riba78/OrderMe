@@ -18,7 +18,8 @@ The script is useful for:
 
 from dotenv import load_dotenv
 from app import create_app
-from models import db, User
+from extensions import db
+from models.user import User
 
 app = create_app()
 

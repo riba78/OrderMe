@@ -43,7 +43,7 @@ Environment Variables Required:
 - SECRET_KEY: Application secret key for JWT
 """
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -97,11 +97,16 @@ def create_app():
 
     @app.after_request
     def after_request(response):
-        if request.method == 'OPTIONS':
-            response.headers['Access-Control-Allow-Origin'] = 'http://localhost:8080'
-            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:8080'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        response = jsonify({'error': 'Internal Server Error', 'details': str(error)})
+        response.status_code = 500
         return response
 
     # Configure SQLAlchemy

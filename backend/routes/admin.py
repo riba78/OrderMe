@@ -48,9 +48,18 @@ def list_users():
     """List all users in the system."""
     try:
         users = User.query.all()
-        return jsonify([user.to_dict() for user in users])
+        user_list = []
+        for user in users:
+            try:
+                user_dict = user.to_dict()
+                user_list.append(user_dict)
+            except Exception as e:
+                print(f"Error serializing user {user.id}: {str(e)}")
+                continue
+        return jsonify(user_list)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error fetching users: {str(e)}")
+        return jsonify({'error': 'Error fetching users', 'details': str(e)}), 500
 
 @admin_bp.route('/users/<int:user_id>', methods=['GET'])
 @admin_required
@@ -72,7 +81,7 @@ def create_user():
         return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
     
     # Validate role
-    if data['role'] not in [role.value for role in UserRole]:
+    if data['role'] not in UserRole.values():
         return jsonify({'error': 'Invalid role'}), 400
     
     # Check if email exists
@@ -137,8 +146,20 @@ def delete_user(user_id):
 @admin_required
 def list_customers():
     """List all customers in the system."""
-    customers = User.query.filter_by(role=UserRole.CUSTOMER.value).all()
-    return jsonify([customer.to_dict() for customer in customers])
+    try:
+        customers = User.query.filter_by(role=UserRole.CUSTOMER).all()
+        customer_list = []
+        for customer in customers:
+            try:
+                customer_dict = customer.to_dict()
+                customer_list.append(customer_dict)
+            except Exception as e:
+                print(f"Error serializing customer {customer.id}: {str(e)}")
+                continue
+        return jsonify(customer_list)
+    except Exception as e:
+        print(f"Error fetching customers: {str(e)}")
+        return jsonify({'error': 'Error fetching customers', 'details': str(e)}), 500
 
 @admin_bp.route('/customers/<int:customer_id>/activate', methods=['POST'])
 @admin_required

@@ -69,12 +69,16 @@ export default {
           axios.get('/admin/customers')
         ]);
 
-        console.log('Users response:', usersRes.data);
-        console.log('Customers response:', customersRes.data);
+        console.log('Users response:', usersRes);
+        console.log('Customers response:', customersRes);
+
+        if (!usersRes.data || !customersRes.data) {
+          throw new Error('Invalid response data');
+        }
 
         stats.value = {
-          totalUsers: usersRes.data.length,
-          activeCustomers: customersRes.data.filter(c => c.is_active).length
+          totalUsers: Array.isArray(usersRes.data) ? usersRes.data.length : 0,
+          activeCustomers: Array.isArray(customersRes.data) ? customersRes.data.filter(c => c.is_active).length : 0
         };
       } catch (error) {
         console.error('Error details:', {
@@ -85,6 +89,7 @@ export default {
         });
 
         if (error.response?.status === 401 || error.response?.status === 403) {
+          await store.dispatch('logout');
           router.push('/signin');
         }
       }

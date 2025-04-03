@@ -43,7 +43,7 @@ Environment Variables Required:
 - SECRET_KEY: Application secret key for JWT
 """
 
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
@@ -84,16 +84,25 @@ def create_admin_user():
 def create_app():
     app = Flask(__name__)
     
-    # Configure CORS properly
-    CORS(app, resources={
-        r"/*": {  # This will cover both /auth and /admin routes
-            "origins": ["http://localhost:8080"],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "expose_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True
-        }
-    })
+    # CORS configuration
+    CORS(app, 
+         resources={
+             r"/*": {
+                 "origins": "http://localhost:8080",
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization"],
+                 "supports_credentials": True
+             }
+         })
+
+    @app.after_request
+    def after_request(response):
+        if request.method == 'OPTIONS':
+            response.headers['Access-Control-Allow-Origin'] = 'http://localhost:8080'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return response
 
     # Configure SQLAlchemy
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url
@@ -108,14 +117,6 @@ def create_app():
     from routes.admin import admin_bp
     app.register_blueprint(auth_bp, url_prefix='/')
     app.register_blueprint(admin_bp, url_prefix='/admin')
-
-    @app.after_request
-    def after_request(response):
-        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:8080')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
 
     with app.app_context():
         # Create database tables

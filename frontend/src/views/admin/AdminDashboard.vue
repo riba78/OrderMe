@@ -56,7 +56,7 @@ export default {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('token');
-        console.log('Token:', token); // Debug log
+        console.log('Token:', token);
 
         if (!token) {
           console.error('No token found');
@@ -64,19 +64,9 @@ export default {
           return;
         }
 
-        const config = {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          withCredentials: true
-        };
-
-        console.log('Making requests with config:', config); // Debug log
-
         const [usersRes, customersRes] = await Promise.all([
-          axios.get('/admin/users', config),
-          axios.get('/admin/customers', config)
+          axios.get('/admin/users'),
+          axios.get('/admin/customers')
         ]);
 
         console.log('Users response:', usersRes.data);

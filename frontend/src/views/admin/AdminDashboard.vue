@@ -75,8 +75,8 @@ export default {
         console.log('Making requests with config:', config); // Debug log
 
         const [usersRes, customersRes] = await Promise.all([
-          axios.get('/api/admin/users', config),
-          axios.get('/api/admin/customers', config)
+          axios.get('/admin/users', config),
+          axios.get('/admin/customers', config)
         ]);
 
         console.log('Users response:', usersRes.data);

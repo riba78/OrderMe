@@ -27,7 +27,7 @@ import router from '@/router';
 
 // Create axios instance with base URL
 const instance = axios.create({
-  baseURL: 'http://localhost:5001/api',
+  baseURL: 'http://localhost:5001/',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'

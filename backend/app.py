@@ -86,7 +86,7 @@ def create_app():
     
     # Configure CORS properly
     CORS(app, resources={
-        r"/api/*": {  # This will cover both /api/auth and /api/admin routes
+        r"/*": {  # This will cover both /auth and /admin routes
             "origins": ["http://localhost:8080"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
@@ -106,8 +106,8 @@ def create_app():
     # Import and register blueprints
     from routes.auth import auth_bp
     from routes.admin import admin_bp
-    app.register_blueprint(auth_bp, url_prefix='/api')
-    app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(auth_bp, url_prefix='/')
+    app.register_blueprint(admin_bp, url_prefix='/admin')
 
     @app.after_request
     def after_request(response):

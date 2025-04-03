@@ -98,7 +98,7 @@ export default {
 
     const fetchStats = async () => {
       try {
-        const response = await axios.get('/api/user/stats');
+        const response = await axios.get('/user/stats');
         stats.value = response.data;
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -107,7 +107,7 @@ export default {
 
     const fetchRecentOrders = async () => {
       try {
-        const response = await axios.get('/api/user/orders/recent');
+        const response = await axios.get('/user/orders/recent');
         recentOrders.value = response.data;
       } catch (error) {
         console.error('Error fetching recent orders:', error);

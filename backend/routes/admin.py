@@ -26,10 +26,10 @@ Security:
 from flask import Blueprint, jsonify, request, current_app
 from functools import wraps
 from models.user import User, UserRole
+from models.customer import Customer
 from extensions import db
 from werkzeug.security import generate_password_hash
 from auth.utils import get_current_user, token_required
-from models.customer import Customer
 from enum import Enum
 
 admin_bp = Blueprint('admin', __name__)
@@ -84,38 +84,53 @@ def get_user(user_id):
 @admin_required
 def create_user():
     """Create a new user with admin privileges."""
-    data = request.get_json()
-    
-    # Validate required fields
-    required_fields = ['email', 'name', 'password', 'role']
-    if not all(field in data for field in required_fields):
-        missing_fields = [field for field in required_fields if field not in data]
-        return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
-    
-    # Validate role
-    if data['role'] not in UserRole.values():
-        return jsonify({'error': 'Invalid role'}), 400
-    
-    # Check if email exists
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 400
-    
     try:
+        print("\n=== Create User Request ===")
+        data = request.get_json()
+        print(f"Request data: {data}")
+        
+        # Validate required fields
+        required_fields = ['email', 'name', 'password', 'role']
+        if not all(field in data for field in required_fields):
+            missing_fields = [field for field in required_fields if field not in data]
+            return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+        
+        # Validate role
+        try:
+            role = UserRole.coerce(data['role'])
+            print(f"Coerced role value: {role}")
+        except ValueError as e:
+            print(f"Invalid role value: {data['role']}")
+            return jsonify({'error': f'Invalid role: {str(e)}'}), 400
+        
+        # Check if email exists
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'error': 'Email already exists'}), 400
+        
         # Create user
         user = User(
             email=data['email'],
             name=data['name'],
-            password_hash=generate_password_hash(data['password']),
-            role=data['role'],
+            role=role,  # Use the coerced role enum
             is_verified=True,  # Admin-created users are verified by default
+            is_active=data.get('is_active', True),  # Use the active flag from form
             created_by_id=get_current_user().id
         )
+        user.set_password(data['password'])
         
+        print(f"Creating user with role: {user.role}")
         db.session.add(user)
         db.session.commit()
-        return jsonify(user.to_dict()), 201
+        
+        user_dict = user.to_dict()
+        print(f"Created user: {user_dict}")
+        return jsonify(user_dict), 201
+        
     except Exception as e:
         db.session.rollback()
+        print(f"Error creating user: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Error creating user: {str(e)}'}), 500
 
 @admin_bp.route('/users/<int:user_id>', methods=['PUT'])
@@ -238,7 +253,9 @@ def update_customer(customer_id):
 @admin_required
 def create_customer():
     """Create a new customer."""
+    print("\n=== Create Customer Request ===")
     data = request.get_json()
+    print(f"Request data: {data}")
     
     # Validate required fields
     required_fields = ['email', 'name', 'password']
@@ -251,26 +268,25 @@ def create_customer():
         return jsonify({'error': 'Email already exists'}), 400
     
     try:
-        # Create customer
-        customer = User(
+        # Create customer using Customer model
+        customer = Customer(
             email=data['email'],
             name=data['name'],
-            password_hash=generate_password_hash(data['password']),
             role=UserRole.CUSTOMER,
             is_verified=True,  # Admin-created customers are verified by default
             is_active=data.get('is_active', True),
+            shipping_address=data.get('shipping_address'),
+            phone_number=data.get('phone_number'),
             created_by_id=get_current_user().id
         )
-        
-        # Add customer-specific fields
-        if 'phone_number' in data:
-            customer.phone_number = data['phone_number']
-        if 'shipping_address' in data:
-            customer.shipping_address = data['shipping_address']
+        customer.set_password(data['password'])
         
         db.session.add(customer)
         db.session.commit()
+        
         return jsonify(customer.to_dict()), 201
+        
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Error creating customer: {str(e)}'}), 500 
+        print(f"Error creating customer: {str(e)}")
+        return jsonify({'error': f'Error creating customer: {str(e)}'}), 500

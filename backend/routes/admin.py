@@ -176,7 +176,7 @@ def list_customers():
         print("\n=== Admin Customers List Request ===")
         print(f"Request headers: {dict(request.headers)}")
         
-        customers = User.query.filter_by(role=UserRole.CUSTOMER).all()
+        customers = Customer.query.all()
         print(f"Found {len(customers)} customers")
         
         customer_list = []
@@ -185,6 +185,8 @@ def list_customers():
                 print(f"\nProcessing customer ID: {customer.id}")
                 print(f"Customer email: {customer.email}")
                 print(f"Customer role: {customer.role}")
+                print(f"Customer phone: {customer.phone_number}")
+                print(f"Customer address: {customer.shipping_address}")
                 customer_dict = customer.to_dict()
                 customer_list.append(customer_dict)
             except Exception as e:
@@ -226,27 +228,39 @@ def deactivate_customer(customer_id):
 @admin_required
 def update_customer(customer_id):
     """Update a customer's information."""
-    customer = User.query.get_or_404(customer_id)
-    if not customer.is_customer:
-        return jsonify({'error': 'User is not a customer'}), 400
-    
-    data = request.get_json()
-    
-    # Update fields
-    allowed_fields = ['name', 'email', 'is_active', 'phone_number', 'shipping_address']
-    for field in allowed_fields:
-        if field in data:
-            setattr(customer, field, data[field])
-    
-    # Update password if provided
-    if 'password' in data and data['password']:
-        customer.password_hash = generate_password_hash(data['password'])
-    
     try:
+        print("\n=== Update Customer Request ===")
+        data = request.get_json()
+        print(f"Request data: {data}")
+        
+        # Get customer using Customer model
+        customer = Customer.query.get_or_404(customer_id)
+        if not customer.is_customer:
+            return jsonify({'error': 'User is not a customer'}), 400
+        
+        print(f"Found customer: {customer.id}, current phone: {customer.phone_number}, current address: {customer.shipping_address}")
+        
+        # Update fields
+        allowed_fields = ['name', 'email', 'is_active', 'phone_number', 'shipping_address']
+        for field in allowed_fields:
+            if field in data:
+                print(f"Updating {field}: {data[field]}")
+                setattr(customer, field, data[field])
+        
+        # Update password if provided
+        if 'password' in data and data['password']:
+            customer.set_password(data['password'])
+        
         db.session.commit()
-        return jsonify(customer.to_dict())
+        updated = customer.to_dict()
+        print(f"Updated customer: {updated}")
+        return jsonify(updated)
+        
     except Exception as e:
         db.session.rollback()
+        print(f"Error updating customer: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': f'Error updating customer: {str(e)}'}), 500
 
 @admin_bp.route('/customers', methods=['POST'])

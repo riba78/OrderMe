@@ -59,6 +59,22 @@ This document outlines the confirmed working functionality of the OrderMe applic
 - Password hashing functional
 - Data persistence confirmed
 
+### 6. Customer Management
+✅ **Fully Functional**
+- Customer creation with proper role assignment
+- Customer data management:
+  - Basic info (name, email)
+  - Customer-specific fields (phone_number, shipping_address)
+  - Active status management
+- Proper data serialization using Customer model
+- Complete CRUD operations:
+  - Create: New customer registration with all fields
+  - Read: List all customers with proper field display
+  - Update: Modify customer details including specific fields
+  - Delete: Remove customer accounts
+- Admin interface integration
+- Data validation and error handling
+
 ## Technical Details
 
 ### Authentication Flow
@@ -103,7 +119,41 @@ This document outlines the confirmed working functionality of the OrderMe applic
 #### Backend
 - `auth.py`: Authentication middleware and token management with role validation
 - `models/user.py`: User model with role management and proper serialization
-- `routes/admin.py`: Admin-specific endpoints with detailed logging
+- `models/customer.py`: Customer model extending User with additional fields:
+  ```python
+  class Customer(User):
+      __tablename__ = 'customers'
+      __mapper_args__ = {'polymorphic_identity': 'customer'}
+
+      id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), primary_key=True)
+      shipping_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+      phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+      def to_dict(self):
+          """Convert customer model to dictionary with all fields."""
+          base_dict = super().to_dict()
+          base_dict.update({
+              'shipping_address': self.shipping_address,
+              'phone_number': self.phone_number
+          })
+          return base_dict
+  ```
+- `routes/admin.py`: Admin-specific endpoints with customer management:
+  ```python
+  @admin_bp.route('/customers', methods=['GET'])
+  @admin_required
+  def list_customers():
+      customers = Customer.query.all()  # Using Customer model for proper field retrieval
+      return jsonify({"customers": [c.to_dict() for c in customers]})
+
+  @admin_bp.route('/customers/<int:customer_id>', methods=['PUT'])
+  @admin_required
+  def update_customer(customer_id):
+      customer = Customer.query.get_or_404(customer_id)  # Using Customer model
+      # Update customer-specific fields
+      allowed_fields = ['name', 'email', 'is_active', 'phone_number', 'shipping_address']
+      # ... field updates and validation ...
+  ```
 - `auth/utils.py`: Centralized token validation and user context management
 - `auth/social.py`: Consistent token generation
 - CORS: Configured for frontend access

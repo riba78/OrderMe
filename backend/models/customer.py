@@ -37,6 +37,15 @@ class Customer(User):
     payment_methods: Mapped[List["PaymentMethod"]] = relationship(lazy="select", backref="customer")
     payment_info: Mapped[Optional["PaymentInfo"]] = relationship(uselist=False, backref="customer")
     
+    def to_dict(self):
+        """Convert customer model to dictionary with all fields."""
+        base_dict = super().to_dict()
+        base_dict.update({
+            'shipping_address': self.shipping_address,
+            'phone_number': self.phone_number
+        })
+        return base_dict
+    
     def add_payment_method(self, payment_method: PaymentMethod) -> None:
         """Add a new payment method."""
         if payment_method.is_default:

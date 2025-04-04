@@ -188,7 +188,7 @@ export default {
     const fetchCustomers = async () => {
       try {
         const response = await axios.get(getApiEndpoint());
-        customers.value = response.data;
+        customers.value = response.data.customers;
       } catch (error) {
         console.error('Error fetching customers:', error);
         alert('Error fetching customers. Please check your database connection and try again.');

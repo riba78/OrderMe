@@ -87,27 +87,38 @@ def create_app():
     # CORS configuration
     CORS(app, 
          resources={
-             r"/*": {
+             r"/api/*": {  # This matches the working state API routes
                  "origins": ["http://localhost:8080"],
                  "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                  "allow_headers": ["Content-Type", "Authorization"],
                  "expose_headers": ["Content-Type", "Authorization"],
-                 "supports_credentials": True,
-                 "send_wildcard": False
+                 "supports_credentials": True
              }
          })
 
     @app.after_request
     def after_request(response):
-        # Always add CORS headers, even for errors
         origin = request.headers.get('Origin')
-        if origin and origin == 'http://localhost:8080':
+        if origin == 'http://localhost:8080':
             response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
             response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
             response.headers['Access-Control-Allow-Credentials'] = 'true'
-            # Add headers to expose error details
-            response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization'
+        return response
+
+    # Update preflight routes to match /api prefix
+    @app.route('/api/admin/users', methods=['OPTIONS'])
+    @app.route('/api/admin/customers', methods=['OPTIONS'])
+    @app.route('/api/auth/login', methods=['OPTIONS'])
+    @app.route('/api/user/customers', methods=['OPTIONS'])  # Add user customers preflight
+    def handle_preflight():
+        response = jsonify({'status': 'ok'})
+        origin = request.headers.get('Origin')
+        if origin == 'http://localhost:8080':
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
         return response
 
     @app.errorhandler(400)
@@ -169,11 +180,11 @@ def create_app():
     # Initialize extensions
     init_extensions(app)
 
-    # Import and register blueprints
+    # Register blueprints with /api prefix as per working state
     from routes.auth import auth_bp
     from routes.admin import admin_bp
-    app.register_blueprint(auth_bp, url_prefix='/')
-    app.register_blueprint(admin_bp, url_prefix='/admin')
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')  # Fix auth routes prefix
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')  # Keep admin routes prefix
 
     with app.app_context():
         # Create database tables

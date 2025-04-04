@@ -91,7 +91,7 @@ const store = createStore({
       commit('setLoading', true)
       commit('setError', null)
       try {
-        const response = await axios.post('/auth/login', { email, password })
+        const response = await axios.post('/api/auth/login', { email, password })
         const { token, user } = response.data
         
         commit('setToken', token)
@@ -119,7 +119,7 @@ const store = createStore({
       commit('setLoading', true)
       commit('setError', null)
       try {
-        const response = await axios.post('/auth/register', { email, password, name })
+        const response = await axios.post('/api/auth/register', { email, password, name })
         const { token, user } = response.data
         
         commit('setToken', token)

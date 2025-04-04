@@ -125,4 +125,85 @@ When encountering issues, verify:
 - ✅ Password hashing
 - ✅ User serialization
 
-This document serves as a reference for the confirmed working state of the application's core authentication and user management functionality. 
+This document serves as a reference for the confirmed working state of the application's core authentication and user management functionality.
+
+# Token Authentication Implementation
+
+## Overview
+The application uses JWT (JSON Web Token) based authentication, implementing a stateless authentication mechanism where the token is passed in the Authorization header of each request.
+
+## Backend Implementation
+1. Token Generation (`auth.py`):
+   - JWT tokens are generated upon successful login/registration
+   - Tokens include user ID in the payload
+   - Tokens are signed with a secret key
+   - Token expiration is configurable
+
+2. Token Validation (`auth.py`):
+   ```python
+   def get_current_user():
+       auth_header = request.headers.get('Authorization')
+       if not auth_header or not auth_header.startswith('Bearer '):
+           return None
+       
+       token = auth_header.split(' ')[1]
+       try:
+           payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+           user_id = payload.get('sub')
+           if user_id:
+               g.current_user = User.query.get(user_id)
+               return g.current_user
+   ```
+
+3. Route Protection:
+   - `@login_required` decorator for protected routes
+   - `@admin_required` decorator for admin-only routes
+   - Token validation on each protected request
+
+## Frontend Implementation
+1. Token Storage:
+   - Tokens are stored in localStorage
+   - Managed through Vuex store state
+
+2. Axios Configuration:
+   ```javascript
+   const instance = axios.create({
+     baseURL: 'http://localhost:5001',
+     headers: {
+       'Content-Type': 'application/json',
+       'Accept': 'application/json'
+     }
+   });
+
+   instance.interceptors.request.use(
+     (config) => {
+       const token = localStorage.getItem('token');
+       if (token) {
+         config.headers.Authorization = `Bearer ${token}`;
+       }
+       return config;
+     }
+   );
+   ```
+
+3. Vuex Store Management:
+   - Token storage in state
+   - Login/logout actions
+   - Automatic token injection in requests
+   - Token removal on logout
+
+## Security Features
+1. Token-based Authentication:
+   - Stateless authentication
+   - No session storage needed
+   - Secure token transmission via Authorization header
+
+2. Token Validation:
+   - Server-side validation on each request
+   - Automatic logout on token expiration
+   - Protected routes require valid token
+
+3. Error Handling:
+   - Automatic logout on 401 responses
+   - Token refresh mechanism
+   - Clear error messages for authentication failures 

@@ -181,7 +181,7 @@ export default {
     });
 
     const getApiEndpoint = (path = '') => {
-      const base = isAdminMode.value ? '/admin/customers' : '/user/customers';
+      const base = isAdminMode.value ? '/api/admin/customers' : '/api/user/customers';
       return path ? `${base}/${path}` : base;
     };
 

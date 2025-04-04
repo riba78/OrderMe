@@ -27,12 +27,12 @@ import router from '@/router';
 
 // Create axios instance with base URL
 const instance = axios.create({
-  baseURL: 'http://localhost:5001',
+  baseURL: 'http://localhost:5001',  // Remove /api since it's already in the routes
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  withCredentials: true
+  withCredentials: true  // Required for CORS with credentials
 });
 
 // Add request interceptor for authentication

@@ -23,7 +23,7 @@ Security:
 - Prevents removal of own admin privileges
 """
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from functools import wraps
 from models.user import User, UserRole
 from extensions import db
@@ -59,21 +59,40 @@ def list_users():
             except Exception as e:
                 print(f"Error serializing user {user.id}: {str(e)}")
                 print(f"User data: id={user.id}, email={user.email}, role={user.role}")
-                # Continue with next user instead of failing completely
                 continue
+        
         print(f"Successfully processed {len(user_list)} users")
         return jsonify(user_list)
+        
     except Exception as e:
         import traceback
         error_traceback = traceback.format_exc()
         print(f"Error in list_users: {str(e)}")
         print(f"Traceback: {error_traceback}")
-        return jsonify({
+        
+        # Create error response with proper status code
+        error_response = {
             'error': 'Error fetching users',
-            'details': str(e),
+            'message': str(e),
             'type': str(type(e).__name__),
-            'traceback': error_traceback if app.debug else None
-        }), 500
+        }
+        
+        if current_app.debug:
+            error_response['traceback'] = error_traceback
+            
+        response = jsonify(error_response)
+        response.status_code = 500
+        
+        # Add CORS headers directly to the error response
+        origin = request.headers.get('Origin')
+        if origin and origin == 'http://localhost:8080':
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization'
+            
+        return response
 
 @admin_bp.route('/users/<int:user_id>', methods=['GET'])
 @admin_required
@@ -173,21 +192,40 @@ def list_customers():
             except Exception as e:
                 print(f"Error serializing customer {customer.id}: {str(e)}")
                 print(f"Customer data: id={customer.id}, email={customer.email}")
-                # Continue with next customer instead of failing completely
                 continue
+        
         print(f"Successfully processed {len(customer_list)} customers")
         return jsonify(customer_list)
+        
     except Exception as e:
         import traceback
         error_traceback = traceback.format_exc()
         print(f"Error in list_customers: {str(e)}")
         print(f"Traceback: {error_traceback}")
-        return jsonify({
+        
+        # Create error response with proper status code
+        error_response = {
             'error': 'Error fetching customers',
-            'details': str(e),
+            'message': str(e),
             'type': str(type(e).__name__),
-            'traceback': error_traceback if app.debug else None
-        }), 500
+        }
+        
+        if current_app.debug:
+            error_response['traceback'] = error_traceback
+            
+        response = jsonify(error_response)
+        response.status_code = 500
+        
+        # Add CORS headers directly to the error response
+        origin = request.headers.get('Origin')
+        if origin and origin == 'http://localhost:8080':
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization'
+            
+        return response
 
 @admin_bp.route('/customers/<int:customer_id>/activate', methods=['POST'])
 @admin_required

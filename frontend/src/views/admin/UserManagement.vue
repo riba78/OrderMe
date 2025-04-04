@@ -158,7 +158,7 @@ export default {
 
     const fetchUsers = async () => {
       try {
-        const response = await axios.get('/admin/users');
+        const response = await axios.get('/api/admin/users');
         users.value = response.data;
       } catch (error) {
         console.error('Error fetching users:', error.response?.data || error.message);
@@ -179,14 +179,14 @@ export default {
         if (editingUser.value) {
           // For updates, don't send password unless changed
           delete userData.password;
-          await axios.put(`/admin/users/${editingUser.value.id}`, userData);
+          await axios.put(`/api/admin/users/${editingUser.value.id}`, userData);
         } else {
           // For new users, all fields are required
           if (!userData.name || !userData.email || !userData.password || !userData.role) {
             alert('Please fill in all required fields');
             return;
           }
-          await axios.post('/admin/users', userData);
+          await axios.post('/api/admin/users', userData);
         }
         await fetchUsers();
         closeModal();
@@ -198,7 +198,7 @@ export default {
 
     const deleteUser = async () => {
       try {
-        await axios.delete(`/admin/users/${deletingUser.value.id}`);
+        await axios.delete(`/api/admin/users/${deletingUser.value.id}`);
         await fetchUsers();
         showDeleteModal.value = false;
       } catch (error) {

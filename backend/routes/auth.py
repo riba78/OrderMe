@@ -70,7 +70,7 @@ import logging
 auth_bp = Blueprint('auth', __name__)
 social_auth = SocialAuthHandler()
 
-@auth_bp.route('/auth/login', methods=['POST'])
+@auth_bp.route('/login', methods=['POST'])
 def login():
     try:
         print("=== Login Request ===")
@@ -120,7 +120,7 @@ def login():
         print("Traceback:", traceback.format_exc())
         return jsonify({'message': str(e)}), 500
 
-@auth_bp.route('/auth/google', methods=['POST'])
+@auth_bp.route('/google', methods=['POST'])
 def google_auth():
     try:
         credential = request.json.get('credential')
@@ -155,7 +155,7 @@ def google_auth():
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@auth_bp.route('/auth/facebook', methods=['POST'])
+@auth_bp.route('/facebook', methods=['POST'])
 def facebook_auth():
     try:
         access_token = request.json.get('accessToken')
@@ -192,7 +192,7 @@ def facebook_auth():
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@auth_bp.route('/auth/data-deletion', methods=['POST'])
+@auth_bp.route('/data-deletion', methods=['POST'])
 def request_data_deletion():
     try:
         data = request.json

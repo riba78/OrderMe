@@ -88,26 +88,78 @@ def create_app():
     CORS(app, 
          resources={
              r"/*": {
-                 "origins": "http://localhost:8080",
+                 "origins": ["http://localhost:8080"],
                  "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                  "allow_headers": ["Content-Type", "Authorization"],
-                 "supports_credentials": True
+                 "expose_headers": ["Content-Type", "Authorization"],
+                 "supports_credentials": True,
+                 "send_wildcard": False
              }
          })
 
     @app.after_request
     def after_request(response):
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:8080'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        # Always add CORS headers, even for errors
+        origin = request.headers.get('Origin')
+        if origin and origin == 'http://localhost:8080':
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            # Add headers to expose error details
+            response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization'
+        return response
+
+    @app.errorhandler(400)
+    def bad_request_error(error):
+        response = jsonify({
+            'error': 'Bad Request',
+            'message': str(error.description) if hasattr(error, 'description') else str(error),
+            'status_code': 400
+        })
+        response.status_code = 400
+        return response
+
+    @app.errorhandler(401)
+    def unauthorized_error(error):
+        response = jsonify({
+            'error': 'Unauthorized',
+            'message': 'Authentication is required to access this resource',
+            'status_code': 401
+        })
+        response.status_code = 401
+        return response
+
+    @app.errorhandler(403)
+    def forbidden_error(error):
+        response = jsonify({
+            'error': 'Forbidden',
+            'message': 'You do not have permission to access this resource',
+            'status_code': 403
+        })
+        response.status_code = 403
+        return response
+
+    @app.errorhandler(404)
+    def not_found_error(error):
+        response = jsonify({
+            'error': 'Not Found',
+            'message': 'The requested resource was not found',
+            'status_code': 404
+        })
+        response.status_code = 404
         return response
 
     @app.errorhandler(500)
     def internal_error(error):
-        response = jsonify({'error': 'Internal Server Error', 'details': str(error)})
+        app.logger.error(f'Server Error: {str(error)}')
+        response = jsonify({
+            'error': 'Internal Server Error',
+            'message': str(error) if app.debug else 'An unexpected error has occurred',
+            'status_code': 500
+        })
         response.status_code = 500
-        return response
+        return response  # CORS headers will be added by after_request
 
     # Configure SQLAlchemy
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url

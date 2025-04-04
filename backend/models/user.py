@@ -92,7 +92,7 @@ class User(db.Model):
             'id': self.id,
             'email': self.email,
             'name': self.name,
-            'role': self.role,
+            'role': self.role.value,
             'is_active': self.is_active,
             'is_verified': self.is_verified,
             'tin_trunk_phone': self.tin_trunk_phone,

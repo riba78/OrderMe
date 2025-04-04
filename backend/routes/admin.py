@@ -48,18 +48,32 @@ def list_users():
     """List all users in the system."""
     try:
         users = User.query.all()
+        print(f"Found {len(users)} users in database")
         user_list = []
         for user in users:
             try:
+                print(f"Processing user {user.id} with role {user.role}")
                 user_dict = user.to_dict()
+                print(f"Successfully serialized user {user.id}")
                 user_list.append(user_dict)
             except Exception as e:
                 print(f"Error serializing user {user.id}: {str(e)}")
+                print(f"User data: id={user.id}, email={user.email}, role={user.role}")
+                # Continue with next user instead of failing completely
                 continue
+        print(f"Successfully processed {len(user_list)} users")
         return jsonify(user_list)
     except Exception as e:
-        print(f"Error fetching users: {str(e)}")
-        return jsonify({'error': 'Error fetching users', 'details': str(e)}), 500
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"Error in list_users: {str(e)}")
+        print(f"Traceback: {error_traceback}")
+        return jsonify({
+            'error': 'Error fetching users',
+            'details': str(e),
+            'type': str(type(e).__name__),
+            'traceback': error_traceback if app.debug else None
+        }), 500
 
 @admin_bp.route('/users/<int:user_id>', methods=['GET'])
 @admin_required
@@ -148,18 +162,32 @@ def list_customers():
     """List all customers in the system."""
     try:
         customers = User.query.filter_by(role=UserRole.CUSTOMER).all()
+        print(f"Found {len(customers)} customers in database")
         customer_list = []
         for customer in customers:
             try:
+                print(f"Processing customer {customer.id}")
                 customer_dict = customer.to_dict()
+                print(f"Successfully serialized customer {customer.id}")
                 customer_list.append(customer_dict)
             except Exception as e:
                 print(f"Error serializing customer {customer.id}: {str(e)}")
+                print(f"Customer data: id={customer.id}, email={customer.email}")
+                # Continue with next customer instead of failing completely
                 continue
+        print(f"Successfully processed {len(customer_list)} customers")
         return jsonify(customer_list)
     except Exception as e:
-        print(f"Error fetching customers: {str(e)}")
-        return jsonify({'error': 'Error fetching customers', 'details': str(e)}), 500
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"Error in list_customers: {str(e)}")
+        print(f"Traceback: {error_traceback}")
+        return jsonify({
+            'error': 'Error fetching customers',
+            'details': str(e),
+            'type': str(type(e).__name__),
+            'traceback': error_traceback if app.debug else None
+        }), 500
 
 @admin_bp.route('/customers/<int:customer_id>/activate', methods=['POST'])
 @admin_required

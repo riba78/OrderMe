@@ -31,6 +31,7 @@ Key Working Features:
 4. API Routes:
    - /api/auth/* - Authentication routes
    - /api/admin/* - Admin routes
+   - /api/user/* - User routes
    - Proper middleware
    - Error handling
 
@@ -49,6 +50,9 @@ from dotenv import load_dotenv
 import os
 from extensions import init_extensions, db
 from models.user import User, UserRole
+from routes.auth import auth_bp
+from routes.admin import admin_bp
+from routes.user import user_bp
 
 load_dotenv()
 
@@ -201,10 +205,9 @@ def create_app():
     init_extensions(app)
 
     # Register blueprints with /api prefix as per working state
-    from routes.auth import auth_bp
-    from routes.admin import admin_bp
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')  # Fix auth routes prefix
-    app.register_blueprint(admin_bp, url_prefix='/api/admin')  # Keep admin routes prefix
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(user_bp, url_prefix='/api/user')
 
     with app.app_context():
         # Create database tables

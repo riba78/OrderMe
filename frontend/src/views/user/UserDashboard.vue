@@ -6,6 +6,9 @@
         <button class="btn-primary" @click="refreshStats">
           <i class="fas fa-sync"></i> Refresh
         </button>
+        <button class="btn-danger" @click="handleLogout">
+          <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
       </div>
     </div>
 
@@ -81,11 +84,15 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import axios from 'axios';
+import axios from '@/utils/axios';
+import { useRouter } from 'vue-router';
+import { useStore } from 'vuex';
 
 export default {
   name: 'UserDashboard',
   setup() {
+    const router = useRouter();
+    const store = useStore();
     const stats = ref({
       totalCustomers: 0,
       activeCustomers: 0,
@@ -96,9 +103,14 @@ export default {
 
     const recentOrders = ref([]);
 
+    const handleLogout = async () => {
+      await store.dispatch('logout');
+      router.push('/signin');
+    };
+
     const fetchStats = async () => {
       try {
-        const response = await axios.get('/user/stats');
+        const response = await axios.get('/api/user/stats');
         stats.value = response.data;
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -107,7 +119,7 @@ export default {
 
     const fetchRecentOrders = async () => {
       try {
-        const response = await axios.get('/user/orders/recent');
+        const response = await axios.get('/api/user/orders/recent');
         recentOrders.value = response.data;
       } catch (error) {
         console.error('Error fetching recent orders:', error);
@@ -134,7 +146,8 @@ export default {
       stats,
       recentOrders,
       refreshStats,
-      formatDate
+      formatDate,
+      handleLogout
     };
   }
 };
@@ -156,6 +169,11 @@ export default {
     font-size: 1.8rem;
     color: #333;
   }
+
+  .header-actions {
+    display: flex;
+    gap: 1rem;
+  }
 }
 
 .btn-primary {
@@ -172,6 +190,27 @@ export default {
 
   &:hover {
     background-color: darken($primary-color, 10%);
+  }
+
+  i {
+    font-size: 0.9rem;
+  }
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background-color: darken(#dc3545, 10%);
   }
 
   i {

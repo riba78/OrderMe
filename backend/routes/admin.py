@@ -29,6 +29,8 @@ from models.user import User, UserRole
 from extensions import db
 from werkzeug.security import generate_password_hash
 from auth.utils import get_current_user, token_required
+from models.customer import Customer
+from enum import Enum
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -45,54 +47,31 @@ def admin_required(f):
 @admin_bp.route('/users', methods=['GET'])
 @admin_required
 def list_users():
-    """List all users in the system."""
     try:
+        print("\n=== Admin Users List Request ===")
+        print(f"Request headers: {dict(request.headers)}")
+        
         users = User.query.all()
-        print(f"Found {len(users)} users in database")
+        print(f"Found {len(users)} users")
+        
         user_list = []
         for user in users:
             try:
-                print(f"Processing user {user.id} with role {user.role}")
+                print(f"\nProcessing user ID: {user.id}")
+                print(f"User email: {user.email}")
+                print(f"User role: {user.role}")
                 user_dict = user.to_dict()
-                print(f"Successfully serialized user {user.id}")
                 user_list.append(user_dict)
             except Exception as e:
-                print(f"Error serializing user {user.id}: {str(e)}")
-                print(f"User data: id={user.id}, email={user.email}, role={user.role}")
+                print(f"Error processing user {user.id}: {str(e)}")
                 continue
         
-        print(f"Successfully processed {len(user_list)} users")
-        return jsonify(user_list)
-        
+        return jsonify({"users": user_list})
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
         print(f"Error in list_users: {str(e)}")
-        print(f"Traceback: {error_traceback}")
-        
-        # Create error response with proper status code
-        error_response = {
-            'error': 'Error fetching users',
-            'message': str(e),
-            'type': str(type(e).__name__),
-        }
-        
-        if current_app.debug:
-            error_response['traceback'] = error_traceback
-            
-        response = jsonify(error_response)
-        response.status_code = 500
-        
-        # Add CORS headers directly to the error response
-        origin = request.headers.get('Origin')
-        if origin and origin == 'http://localhost:8080':
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization'
-            
-        return response
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Internal server error"}), 500
 
 @admin_bp.route('/users/<int:user_id>', methods=['GET'])
 @admin_required
@@ -178,54 +157,31 @@ def delete_user(user_id):
 @admin_bp.route('/customers', methods=['GET'])
 @admin_required
 def list_customers():
-    """List all customers in the system."""
     try:
+        print("\n=== Admin Customers List Request ===")
+        print(f"Request headers: {dict(request.headers)}")
+        
         customers = User.query.filter_by(role=UserRole.CUSTOMER).all()
-        print(f"Found {len(customers)} customers in database")
+        print(f"Found {len(customers)} customers")
+        
         customer_list = []
         for customer in customers:
             try:
-                print(f"Processing customer {customer.id}")
+                print(f"\nProcessing customer ID: {customer.id}")
+                print(f"Customer email: {customer.email}")
+                print(f"Customer role: {customer.role}")
                 customer_dict = customer.to_dict()
-                print(f"Successfully serialized customer {customer.id}")
                 customer_list.append(customer_dict)
             except Exception as e:
-                print(f"Error serializing customer {customer.id}: {str(e)}")
-                print(f"Customer data: id={customer.id}, email={customer.email}")
+                print(f"Error processing customer {customer.id}: {str(e)}")
                 continue
         
-        print(f"Successfully processed {len(customer_list)} customers")
-        return jsonify(customer_list)
-        
+        return jsonify({"customers": customer_list})
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
         print(f"Error in list_customers: {str(e)}")
-        print(f"Traceback: {error_traceback}")
-        
-        # Create error response with proper status code
-        error_response = {
-            'error': 'Error fetching customers',
-            'message': str(e),
-            'type': str(type(e).__name__),
-        }
-        
-        if current_app.debug:
-            error_response['traceback'] = error_traceback
-            
-        response = jsonify(error_response)
-        response.status_code = 500
-        
-        # Add CORS headers directly to the error response
-        origin = request.headers.get('Origin')
-        if origin and origin == 'http://localhost:8080':
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Methods'] = 'GET, PUT, POST, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
-            response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization'
-            
-        return response
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Internal server error"}), 500
 
 @admin_bp.route('/customers/<int:customer_id>/activate', methods=['POST'])
 @admin_required

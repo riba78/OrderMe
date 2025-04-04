@@ -56,17 +56,18 @@ export default {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('token');
-        console.log('Token:', token);
-
         if (!token) {
           console.error('No token found');
           router.push('/signin');
           return;
         }
 
+        // Ensure axios instance has the token
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
         const [usersRes, customersRes] = await Promise.all([
-          axios.get('/admin/users'),
-          axios.get('/admin/customers')
+          axios.get('/api/admin/users'),
+          axios.get('/api/admin/customers')
         ]);
 
         console.log('Users response:', usersRes);
@@ -77,8 +78,10 @@ export default {
         }
 
         stats.value = {
-          totalUsers: Array.isArray(usersRes.data) ? usersRes.data.length : 0,
-          activeCustomers: Array.isArray(customersRes.data) ? customersRes.data.filter(c => c.is_active).length : 0
+          totalUsers: Array.isArray(usersRes.data?.users) ? usersRes.data.users.length : 0,
+          activeCustomers: Array.isArray(customersRes.data?.customers) 
+            ? customersRes.data.customers.filter(c => c.is_active).length 
+            : 0
         };
       } catch (error) {
         console.error('Error details:', {

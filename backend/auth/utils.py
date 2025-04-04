@@ -8,6 +8,7 @@ Functions:
    - Extracts and validates JWT token from request header
    - Decodes token and retrieves user information
    - Returns User object or None if validation fails
+   - Validates user role matches token role
 
 2. token_required:
    - Decorator for protecting routes requiring authentication
@@ -18,6 +19,7 @@ Security Features:
 - JWT token validation
 - User authentication state management
 - Secure token decoding
+- Role validation
 - Proper error handling
 """
 
@@ -25,36 +27,56 @@ from functools import wraps
 from flask import request, jsonify
 import jwt
 from models.user import User
-import os
+from config import settings
 
 def get_current_user():
     """
     Get the current authenticated user from the JWT token.
+    Also validates that the user's role matches the role in the token.
     
     Returns:
-        User: The authenticated user object if valid token
-        None: If token is invalid or missing
+        User: The authenticated user object if valid token and role
+        None: If token is invalid, missing, or role mismatch
     """
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
+        print("Missing or invalid Authorization header")
         return None
     
     try:
         token = auth_header.split(' ')[1]
-        secret_key = os.getenv('SECRET_KEY')
         
-        payload = jwt.decode(token, secret_key, algorithms=['HS256'])
+        payload = jwt.decode(
+            token, 
+            settings.SECRET_KEY, 
+            algorithms=[settings.ALGORITHM]
+        )
         user_id = payload.get('sub')
+        token_role = payload.get('role')
         
-        if not user_id:
+        if not user_id or not token_role:
+            print("Missing user_id or role in token")
             return None
             
-        return User.query.get(int(user_id))
+        user = User.query.get(int(user_id))
+        if not user:
+            print(f"User {user_id} not found")
+            return None
+            
+        # Validate that the user's current role matches the role in the token
+        if user.role.value != token_role:
+            print(f"Role mismatch - Token: {token_role}, User: {user.role.value}")
+            return None
+            
+        return user
     except jwt.ExpiredSignatureError:
+        print("Token expired")
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        print(f"Invalid token: {str(e)}")
         return None
-    except (KeyError, ValueError):
+    except (KeyError, ValueError) as e:
+        print(f"Token parsing error: {str(e)}")
         return None
 
 def token_required(f):

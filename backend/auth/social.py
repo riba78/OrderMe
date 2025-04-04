@@ -37,8 +37,6 @@ class SocialAuthHandler:
         self.google_client_id = settings.GOOGLE_CLIENT_ID
         self.facebook_app_id = settings.FACEBOOK_APP_ID
         self.facebook_app_secret = settings.FACEBOOK_APP_SECRET
-        self.jwt_secret = settings.SECRET_KEY
-        self.token_expire_days = settings.ACCESS_TOKEN_EXPIRE_DAYS
 
     def verify_google_token(self, token: str) -> Optional[Dict]:
         try:
@@ -87,13 +85,20 @@ class SocialAuthHandler:
 
     def generate_token(self, user: User) -> str:
         """Generate JWT token for authenticated user"""
+        expires_delta = timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
+        expire = datetime.utcnow() + expires_delta
+        
         payload = {
+            'exp': expire,
             'sub': str(user.id),
             'email': user.email,
-            'role': user.role.value,
-            'exp': datetime.utcnow() + timedelta(days=self.token_expire_days)
+            'role': user.role.value
         }
-        return jwt.encode(payload, self.jwt_secret, algorithm='HS256')
+        return jwt.encode(
+            payload, 
+            settings.SECRET_KEY, 
+            algorithm=settings.ALGORITHM
+        )
 
     @staticmethod
     def create_or_get_user(user_data: dict) -> User:
@@ -104,22 +109,4 @@ class SocialAuthHandler:
                 name=user_data.get('name', ''),
                 provider=user_data['provider']
             )
-        return user
-
-    @staticmethod
-    def create_token(user: User) -> str:
-        expires_delta = timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
-        expire = datetime.utcnow() + expires_delta
-        
-        to_encode = {
-            'exp': expire,
-            'sub': str(user.id),
-            'email': user.email,
-            'role': user.role.value
-        }
-        
-        return jwt.encode(
-            to_encode,
-            settings.SECRET_KEY,
-            algorithm=settings.ALGORITHM
-        ) 
+        return user 

@@ -84,15 +84,16 @@ def create_admin_user():
 def create_app():
     app = Flask(__name__)
     
-    # CORS configuration
+    # CORS configuration - Updated to handle all responses
     CORS(app, 
          resources={
-             r"/api/*": {  # This matches the working state API routes
+             r"/*": {  # Match all routes
                  "origins": ["http://localhost:8080"],
                  "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                 "allow_headers": ["Content-Type", "Authorization"],
+                 "allow_headers": ["Content-Type", "Authorization", "Accept"],
                  "expose_headers": ["Content-Type", "Authorization"],
-                 "supports_credentials": True
+                 "supports_credentials": True,
+                 "max_age": 3600
              }
          })
 
@@ -100,27 +101,46 @@ def create_app():
     def after_request(response):
         origin = request.headers.get('Origin')
         if origin == 'http://localhost:8080':
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            # Always set CORS headers, even for errors
+            response.headers.update({
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+                'Access-Control-Allow-Credentials': 'true',
+                'Access-Control-Max-Age': '3600',
+                'Access-Control-Expose-Headers': 'Content-Type, Authorization'
+            })
         return response
 
-    # Update preflight routes to match /api prefix
-    @app.route('/api/admin/users', methods=['OPTIONS'])
-    @app.route('/api/admin/customers', methods=['OPTIONS'])
-    @app.route('/api/auth/login', methods=['OPTIONS'])
-    @app.route('/api/user/customers', methods=['OPTIONS'])  # Add user customers preflight
-    def handle_preflight():
+    # Global error handler to ensure CORS headers are set
+    @app.errorhandler(Exception)
+    def handle_error(error):
+        code = getattr(error, 'code', 500)
+        response = jsonify({
+            'error': str(error.__class__.__name__),
+            'message': str(error),
+            'status_code': code
+        })
+        response.status_code = code
+        return response
+
+    # Remove individual preflight routes as they're now handled globally
+    @app.route('/<path:path>', methods=['OPTIONS'])
+    def handle_preflight(path):
         response = jsonify({'status': 'ok'})
         origin = request.headers.get('Origin')
         if origin == 'http://localhost:8080':
-            response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            response.headers.update({
+                'Access-Control-Allow-Origin': origin,
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+                'Access-Control-Allow-Credentials': 'true',
+                'Access-Control-Max-Age': '3600',
+                'Access-Control-Expose-Headers': 'Content-Type, Authorization'
+            })
         return response
 
+    # Error handlers with proper CORS support
     @app.errorhandler(400)
     def bad_request_error(error):
         response = jsonify({
@@ -170,7 +190,7 @@ def create_app():
             'status_code': 500
         })
         response.status_code = 500
-        return response  # CORS headers will be added by after_request
+        return response
 
     # Configure SQLAlchemy
     app.config['SQLALCHEMY_DATABASE_URI'] = db_url

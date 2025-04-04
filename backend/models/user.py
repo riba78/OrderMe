@@ -37,6 +37,23 @@ class UserRole(str, Enum):
     USER = 'USER'
     CUSTOMER = 'CUSTOMER'
 
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return f"UserRole.{self.value}"
+
+    @classmethod
+    def coerce(cls, item):
+        """Coerce a string or UserRole enum to a UserRole value."""
+        if isinstance(item, str):
+            return cls(item)
+        elif isinstance(item, cls):
+            return item
+        elif item is None:
+            return None
+        raise ValueError(f'Invalid UserRole value: {item}')
+
 class User(db.Model):
     __tablename__ = 'users'
 
@@ -87,15 +104,47 @@ class User(db.Model):
         user.set_password(password)
         return user
     
+    @property
+    def role_value(self) -> str:
+        """Get the string value of the role."""
+        return self.role.value if self.role else None
+
     def to_dict(self):
-        return {
-            'id': self.id,
-            'email': self.email,
-            'name': self.name,
-            'role': self.role.value,
-            'is_active': self.is_active,
-            'is_verified': self.is_verified,
-            'tin_trunk_phone': self.tin_trunk_phone,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
-        } 
+        """Convert user model to dictionary with proper string serialization."""
+        try:
+            role_str = None
+            if hasattr(self, 'role') and self.role is not None:
+                try:
+                    role_str = str(self.role.value)
+                except Exception as e:
+                    print(f"Error converting role to string: {e}")
+                    role_str = str(self.role)
+            
+            print(f"Converting user {self.id} to dict:")
+            print(f"  - Role object: {self.role}")
+            print(f"  - Role type: {type(self.role)}")
+            print(f"  - Role string: {role_str}")
+            
+            result = {
+                'id': self.id,
+                'email': self.email,
+                'name': self.name,
+                'role': role_str,
+                'is_active': self.is_active,
+                'is_verified': self.is_verified,
+                'tin_trunk_phone': self.tin_trunk_phone,
+                'created_at': self.created_at.isoformat() if self.created_at else None,
+                'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            }
+            
+            # Add polymorphic type information
+            if hasattr(self, '__mapper_args__'):
+                result['type'] = self.__mapper_args__.get('polymorphic_identity', 'user')
+            
+            return result
+        except Exception as e:
+            print(f"Error in to_dict for user {self.id}:")
+            print(f"  - Error: {str(e)}")
+            print(f"  - Role: {getattr(self, 'role', None)}")
+            print(f"  - Role type: {type(getattr(self, 'role', None))}")
+            raise 

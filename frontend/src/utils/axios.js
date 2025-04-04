@@ -31,8 +31,7 @@ const instance = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
-  },
-  withCredentials: true  // Required for CORS with credentials
+  }
 });
 
 // Add request interceptor for authentication

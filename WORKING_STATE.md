@@ -38,16 +38,18 @@ This document outlines the confirmed working functionality of the OrderMe applic
 - Admin users can successfully log in
 - Proper admin role validation
 - Successful redirection to AdminDashboard
-- Token-based authentication working
+- Token-based authentication working with role validation
 - Admin privileges properly enforced
+- Consistent token generation and validation across the application
 
 ### 4. Backend Authentication (auth.py)
 ✅ **Fully Functional**
-- JWT token generation
-- Token validation middleware
-- Role-based access control
+- JWT token generation with proper role serialization
+- Token validation middleware with role verification
+- Role-based access control using enum values
 - Session management
 - User context management
+- Consistent use of settings for JWT operations
 
 ### 5. Database Integration
 ✅ **Fully Functional**
@@ -62,12 +64,32 @@ This document outlines the confirmed working functionality of the OrderMe applic
 ### Authentication Flow
 1. User registration:
    ```
-   SignUp.vue -> Backend (/api/auth/register) -> MySQL -> JWT Token
+   SignUp.vue -> POST /api/auth/register -> User Creation -> JWT Token Generation -> Role Assignment -> Response
    ```
 
-2. Admin login:
+2. User login:
    ```
-   SignIn.vue -> Backend (/api/auth/login) -> Role Validation -> AdminDashboard
+   SignIn.vue -> POST /api/auth/login -> Credential Validation -> Role Verification -> JWT Token Generation -> Response
+   ```
+
+3. Token validation:
+   ```python
+   def get_current_user():
+       try:
+           token = get_token_from_header()
+           payload = decode_jwt(token)
+           validate_user_and_role(payload)
+           return user
+   ```
+
+4. Role-based routing:
+   ```javascript
+   // Frontend
+   if (user.role === 'ADMIN') {
+     router.push('/admin/dashboard')
+   } else if (user.role === 'USER') {
+     router.push('/user/dashboard')
+   }
    ```
 
 ### Key Components
@@ -79,86 +101,198 @@ This document outlines the confirmed working functionality of the OrderMe applic
 - Token storage: LocalStorage implementation
 
 #### Backend
-- `auth.py`: Authentication middleware and token management
-- `models/user.py`: User model with role management
-- `routes/admin.py`: Admin-specific endpoints
+- `auth.py`: Authentication middleware and token management with role validation
+- `models/user.py`: User model with role management and proper serialization
+- `routes/admin.py`: Admin-specific endpoints with detailed logging
+- `auth/utils.py`: Centralized token validation and user context management
+- `auth/social.py`: Consistent token generation
 - CORS: Configured for frontend access
 
 ### Environment Configuration
 - Frontend: Running on port 8080
 - Backend: Running on port 5001
-- MySQL: Running via XAMPP
-- CORS: Properly configured between frontend and backend
+- Database: MySQL (configurable via DATABASE_URL)
+- Required Environment Variables:
+  ```
+  # Database
+  DATABASE_URL=mysql://user:password@localhost/orderme
+  DB_SSL_CA=/path/to/ca.pem  # Optional, for production
+
+  # Authentication
+  SECRET_KEY=your-secret-key-here
+  ALGORITHM=HS256
+  ACCESS_TOKEN_EXPIRE_DAYS=30
+
+  # Admin Configuration
+  ADMIN_EMAIL=admin@orderme.com
+  ADMIN_PASSWORD=admin123
+
+  # OAuth (Optional)
+  GOOGLE_CLIENT_ID=your-client-id
+  GOOGLE_CLIENT_SECRET=your-client-secret
+  FACEBOOK_APP_ID=your-app-id
+  FACEBOOK_APP_SECRET=your-app-secret
+  ```
+
+### Frontend Configuration
+1. Axios Setup (`utils/axios.js`):
+   ```javascript
+   const instance = axios.create({
+     baseURL: 'http://localhost:5001',
+     headers: {
+       'Content-Type': 'application/json',
+       'Accept': 'application/json'
+     }
+   });
+
+   // Token injection
+   instance.interceptors.request.use(config => {
+     const token = localStorage.getItem('token');
+     if (token) {
+       config.headers.Authorization = `Bearer ${token}`;
+     }
+     return config;
+   });
+
+   // Error handling
+   instance.interceptors.response.use(
+     response => response,
+     error => {
+       if (error.response?.status === 401 || error.response?.status === 403) {
+         store.dispatch('logout');
+         router.push('/signin');
+       }
+       return Promise.reject(error);
+     }
+   );
+   ```
+
+2. Vuex Store (`store/index.js`):
+   ```javascript
+   state: {
+     user: JSON.parse(localStorage.getItem('user')) || null,
+     token: localStorage.getItem('token') || null,
+     rememberMe: false
+   },
+   getters: {
+     isAuthenticated: state => !!state.token,
+     isAdmin: state => state.user?.role === 'ADMIN'
+   }
+   ```
+
+### Backend Configuration
+1. CORS Setup (`app.py`):
+   ```python
+   CORS(app, 
+        resources={
+            r"/*": {
+                "origins": ["http://localhost:8080"],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                "expose_headers": ["Content-Type", "Authorization"],
+                "supports_credentials": True,
+                "max_age": 3600
+            }
+        })
+   ```
+
+2. Error Handling:
+   - 400: Bad Request
+   - 401: Unauthorized
+   - 403: Forbidden
+   - 404: Not Found
+   - 500: Internal Server Error
+   - Global error handler with CORS headers
 
 ## Reference Implementation
 
 ### User Model
 The User model (`models/user.py`) is properly configured with:
-- Role-based access control (ADMIN, USER, CUSTOMER)
+- Role-based access control (ADMIN, USER, CUSTOMER) using SQLAlchemy enum
 - Secure password hashing
-- Proper serialization methods
+- Proper role serialization in to_dict() method
 - Audit fields (created_at, updated_at)
+- Debug logging for role conversion
 
 ### Authentication Middleware
-The authentication system (`auth.py`) correctly implements:
-- Token validation
+The authentication system now correctly implements:
+- Token validation with role verification
 - User context management
-- Role-based access control
+- Role-based access control using enum values
 - Session handling
+- Consistent JWT secret and algorithm usage
+- Detailed error logging
 
-## Troubleshooting Notes
-
-When encountering issues, verify:
-1. MySQL connection is active
-2. Backend server is running on port 5001
-3. Frontend is configured to use correct API URL
-4. Token is properly stored in localStorage
-5. CORS headers are properly set
-6. User has correct role assigned in database
-
-## Known Working State
-- ✅ New user registration
-- ✅ Admin user login
-- ✅ Role-based access control
-- ✅ Database integration
-- ✅ Token-based authentication
-- ✅ Password hashing
-- ✅ User serialization
-
-This document serves as a reference for the confirmed working state of the application's core authentication and user management functionality.
-
-# Token Authentication Implementation
+## Token Authentication Implementation
 
 ## Overview
-The application uses JWT (JSON Web Token) based authentication, implementing a stateless authentication mechanism where the token is passed in the Authorization header of each request.
+The application uses JWT (JSON Web Token) based authentication with proper role validation and consistent token handling across all components.
 
 ## Backend Implementation
-1. Token Generation (`auth.py`):
-   - JWT tokens are generated upon successful login/registration
-   - Tokens include user ID in the payload
-   - Tokens are signed with a secret key
-   - Token expiration is configurable
-
-2. Token Validation (`auth.py`):
+1. Token Generation (`auth/social.py`):
    ```python
-   def get_current_user():
-       auth_header = request.headers.get('Authorization')
-       if not auth_header or not auth_header.startswith('Bearer '):
-           return None
-       
-       token = auth_header.split(' ')[1]
-       try:
-           payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-           user_id = payload.get('sub')
-           if user_id:
-               g.current_user = User.query.get(user_id)
-               return g.current_user
+   def generate_token(self, user: User) -> str:
+       payload = {
+           'exp': datetime.utcnow() + timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS),
+           'sub': str(user.id),
+           'email': user.email,
+           'role': user.role.value
+       }
+       return jwt.encode(
+           payload, 
+           settings.SECRET_KEY, 
+           algorithm=settings.ALGORITHM
+       )
    ```
 
-3. Route Protection:
-   - `@login_required` decorator for protected routes
-   - `@admin_required` decorator for admin-only routes
-   - Token validation on each protected request
+2. Token Validation (`auth/utils.py`):
+   ```python
+   def get_current_user():
+       try:
+           token = auth_header.split(' ')[1]
+           payload = jwt.decode(
+               token, 
+               settings.SECRET_KEY, 
+               algorithms=[settings.ALGORITHM]
+           )
+           user_id = payload.get('sub')
+           token_role = payload.get('role')
+           
+           if not user_id or not token_role:
+               return None
+               
+           user = User.query.get(int(user_id))
+           if not user:
+               return None
+               
+           # Validate that the user's current role matches the role in the token
+           if user.role.value != token_role:
+               return None
+               
+           return user
+       except Exception as e:
+           print(f"Token validation error: {str(e)}")
+           return None
+   ```
+
+3. Role Serialization (`models/user.py`):
+   ```python
+   def to_dict(self):
+       try:
+           role_str = None
+           if hasattr(self, 'role') and self.role is not None:
+               role_str = str(self.role.value)
+           
+           return {
+               'id': self.id,
+               'email': self.email,
+               'role': role_str,
+               # ... other fields ...
+           }
+       except Exception as e:
+           print(f"Error in to_dict: {str(e)}")
+           raise
+   ```
 
 ## Frontend Implementation
 1. Token Storage:
@@ -194,16 +328,32 @@ The application uses JWT (JSON Web Token) based authentication, implementing a s
 
 ## Security Features
 1. Token-based Authentication:
-   - Stateless authentication
+   - Stateless authentication with role validation
    - No session storage needed
    - Secure token transmission via Authorization header
+   - Consistent token generation and validation
 
 2. Token Validation:
    - Server-side validation on each request
+   - Role verification on each request
    - Automatic logout on token expiration
-   - Protected routes require valid token
+   - Protected routes require valid token and role
 
 3. Error Handling:
-   - Automatic logout on 401 responses
-   - Token refresh mechanism
-   - Clear error messages for authentication failures 
+   - Automatic logout on 401/403 responses
+   - Detailed backend logging for debugging
+   - Clear error messages for authentication failures
+   - Role mismatch detection and handling
+
+## Known Working State
+- ✅ New user registration
+- ✅ Admin user login
+- ✅ Role-based access control with proper validation
+- ✅ Database integration
+- ✅ Token-based authentication with role verification
+- ✅ Password hashing
+- ✅ User serialization with role handling
+- ✅ Admin dashboard user/customer listing
+- ✅ Consistent JWT handling across components
+
+This document serves as a reference for the confirmed working state of the application's core authentication and user management functionality. 

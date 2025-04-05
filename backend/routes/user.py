@@ -9,7 +9,7 @@ This module handles user-specific endpoints with:
 """
 
 from flask import Blueprint, jsonify, request
-from models.user import User, UserProfile
+from models import User, UserProfile
 from models.customer import Customer
 from models.activity_log import ActivityLog
 from models.verification_message_log import VerificationMessageLog

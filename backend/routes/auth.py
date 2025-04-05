@@ -36,7 +36,7 @@ Key Features:
 
 from flask import Blueprint, request, jsonify, current_app
 from auth.social import SocialAuthHandler
-from models.user import User, UserRole, VerificationMethod, UserProfile
+from models import User, UserRole, VerificationMethod, UserProfile, UserVerificationMethod
 from models.activity_log import ActivityLog
 from models.verification_message_log import VerificationMessageLog
 from extensions import db

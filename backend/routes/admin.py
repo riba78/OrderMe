@@ -10,7 +10,7 @@ This module handles all admin-specific endpoints with:
 """
 
 from flask import Blueprint, jsonify, request
-from models.user import User, UserRole, UserProfile, VerificationMethod
+from models import User, UserRole, UserProfile, VerificationMethod
 from models.customer import Customer
 from models.activity_log import ActivityLog
 from models.verification_message_log import VerificationMessageLog

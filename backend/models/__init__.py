@@ -1,6 +1,14 @@
+"""
+Models Package
+
+This package contains all SQLAlchemy models for the application.
+"""
+
 from .base import Base
-from .user import User, UserRole, UserProfile, UserVerificationMethod, VerificationMethod
-from .customer import Customer
+from .user import User, UserRole, VerificationMethod
+from .user_profile import UserProfile
+from .user_verification_method import UserVerificationMethod
+from .customer import Customer, PaymentMethod, PaymentInfo
 from .order import Order
 from .order_item import OrderItem
 from .product import Product
@@ -19,10 +27,12 @@ __all__ = [
     'Base',
     'User',
     'UserRole',
+    'VerificationMethod',
     'UserProfile',
     'UserVerificationMethod',
-    'VerificationMethod',
     'Customer',
+    'PaymentMethod',
+    'PaymentInfo',
     'Order',
     'OrderItem',
     'Product',

@@ -30,57 +30,58 @@ The module centralizes all configuration management and provides
 a single source of truth for application settings.
 """
 
-from pydantic import BaseSettings
+import os
+from dotenv import load_dotenv
 from typing import Optional, List
 from enum import Enum
 
+# Load environment variables from .env file
+load_dotenv()
+
 class VerificationMethod(str, Enum):
-    EMAIL = "EMAIL"
-    PHONE = "PHONE"
-    GOOGLE = "GOOGLE"
-    FACEBOOK = "FACEBOOK"
+    EMAIL = "email"
+    PHONE = "phone"
+    WHATSAPP = "whatsapp"
 
-class Settings(BaseSettings):
-    # Database settings
-    DATABASE_URL: Optional[str] = None
-    DB_SSL_CA: Optional[str] = None
-    
-    # JWT settings
-    SECRET_KEY: str = "your-secret-key-here"  # Change this in production
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_DAYS: int = 30
+class Settings:
+    def __init__(self):
+        # Database settings
+        self.DATABASE_URL = os.getenv('DATABASE_URL')
+        self.DB_SSL_CA = os.getenv('DB_SSL_CA')
+        
+        # JWT settings
+        self.SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-here')
+        self.ALGORITHM = os.getenv('ALGORITHM', 'HS256')
+        self.ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv('ACCESS_TOKEN_EXPIRE_DAYS', '30'))
 
-    # Google OAuth
-    GOOGLE_CLIENT_ID: Optional[str] = None
-    GOOGLE_CLIENT_SECRET: Optional[str] = None
+        # Google OAuth
+        self.GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+        self.GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 
-    # Facebook OAuth
-    FACEBOOK_APP_ID: Optional[str] = None
-    FACEBOOK_APP_SECRET: Optional[str] = None
+        # Facebook OAuth
+        self.FACEBOOK_APP_ID = os.getenv('FACEBOOK_APP_ID')
+        self.FACEBOOK_APP_SECRET = os.getenv('FACEBOOK_APP_SECRET')
 
-    # Verification settings
-    VERIFICATION_METHODS: List[VerificationMethod] = [VerificationMethod.EMAIL]
-    VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 30
-    EMAIL_VERIFICATION_TEMPLATE: str = "email_verification.html"
-    PHONE_VERIFICATION_TEMPLATE: str = "phone_verification.txt"
+        # Verification settings
+        verification_methods = os.getenv('VERIFICATION_METHODS', 'EMAIL')
+        self.VERIFICATION_METHODS = [VerificationMethod(method.strip()) for method in verification_methods.split(',')]
+        self.VERIFICATION_TOKEN_EXPIRE_MINUTES = int(os.getenv('VERIFICATION_TOKEN_EXPIRE_MINUTES', '30'))
+        self.EMAIL_VERIFICATION_TEMPLATE = os.getenv('EMAIL_VERIFICATION_TEMPLATE', 'email_verification.html')
+        self.PHONE_VERIFICATION_TEMPLATE = os.getenv('PHONE_VERIFICATION_TEMPLATE', 'phone_verification.txt')
 
-    # Rate limiting settings
-    RATE_LIMIT_ATTEMPTS: int = 5
-    RATE_LIMIT_WINDOW: int = 300  # 5 minutes in seconds
-    RATE_LIMIT_BLOCK_DURATION: int = 900  # 15 minutes in seconds
+        # Rate limiting settings
+        self.RATE_LIMIT_ATTEMPTS = int(os.getenv('RATE_LIMIT_ATTEMPTS', '5'))
+        self.RATE_LIMIT_WINDOW = int(os.getenv('RATE_LIMIT_WINDOW', '300'))
+        self.RATE_LIMIT_BLOCK_DURATION = int(os.getenv('RATE_LIMIT_BLOCK_DURATION', '900'))
 
-    # Activity logging settings
-    ACTIVITY_LOG_ENABLED: bool = True
-    ACTIVITY_LOG_RETENTION_DAYS: int = 90
-    ACTIVITY_LOG_IP_TRACKING: bool = True
-    ACTIVITY_LOG_USER_AGENT_TRACKING: bool = True
+        # Activity logging settings
+        self.ACTIVITY_LOG_ENABLED = os.getenv('ACTIVITY_LOG_ENABLED', 'true').lower() == 'true'
+        self.ACTIVITY_LOG_RETENTION_DAYS = int(os.getenv('ACTIVITY_LOG_RETENTION_DAYS', '90'))
+        self.ACTIVITY_LOG_IP_TRACKING = os.getenv('ACTIVITY_LOG_IP_TRACKING', 'true').lower() == 'true'
+        self.ACTIVITY_LOG_USER_AGENT_TRACKING = os.getenv('ACTIVITY_LOG_USER_AGENT_TRACKING', 'true').lower() == 'true'
 
-    # Environment
-    ENVIRONMENT: str = "development"
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+        # Environment
+        self.ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 
     @property
     def is_production(self):

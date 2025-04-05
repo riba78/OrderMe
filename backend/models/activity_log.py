@@ -45,7 +45,7 @@ class ActivityLog(Base):
     entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -64,7 +64,7 @@ class ActivityLog(Base):
             'entity_type': self.entity_type,
             'entity_id': self.entity_id,
             'description': self.description,
-            'metadata': self.metadata,
+            'meta_data': self.meta_data,
             'ip_address': self.ip_address,
             'user_agent': self.user_agent,
             'created_at': self.created_at.isoformat() if self.created_at else None,
@@ -100,7 +100,7 @@ class ActivityLog(Base):
             entity_type=entity_type,
             entity_id=entity_id,
             description=description,
-            metadata=metadata,
+            meta_data=metadata,
             ip_address=ip_address,
             user_agent=user_agent
         ) 

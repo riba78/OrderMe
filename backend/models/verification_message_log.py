@@ -48,7 +48,7 @@ class VerificationMessageLog(Base):
     provider: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # 'smtp', 'twilio', 'whatsapp'
     provider_message_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Relationships
     user = relationship('User', backref='verification_messages')
@@ -68,7 +68,7 @@ class VerificationMessageLog(Base):
             'provider': self.provider,
             'provider_message_id': self.provider_message_id,
             'error_message': self.error_message,
-            'metadata': self.metadata,
+            'meta_data': self.meta_data,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'user': {
                 'id': self.user.id,
@@ -106,5 +106,5 @@ class VerificationMessageLog(Base):
             provider=provider,
             provider_message_id=provider_message_id,
             error_message=error_message,
-            metadata=metadata
+            meta_data=metadata
         ) 

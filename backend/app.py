@@ -48,6 +48,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+import uuid
 from extensions import init_extensions, db
 from models.user import User, UserRole
 from routes.auth import auth_bp
@@ -70,11 +71,12 @@ def create_admin_user():
     if not admin:
         print("Admin user not found, creating...")
         admin = User(
+            uuid=str(uuid.uuid4()),
             email=admin_email,
-            name='Admin',
-            role=UserRole.ADMIN,
+            role=UserRole.ADMIN.value,
             is_verified=True,
-            is_active=True
+            is_active=True,
+            created_as_role=UserRole.ADMIN.value
         )
         admin.set_password(admin_password)
         print(f"Generated password hash: {admin.password_hash}")

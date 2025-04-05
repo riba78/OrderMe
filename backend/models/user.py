@@ -31,7 +31,7 @@ authorization system, managing all user-related data and operations.
 from datetime import datetime
 from enum import Enum
 from typing import Optional, List
-from sqlalchemy import Integer, String, Boolean, DateTime, ForeignKey, Enum as SQLEnum, Text
+from sqlalchemy import Integer, String, Boolean, DateTime, ForeignKey, Enum as SQLEnum, Text, JSON, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.security import generate_password_hash, check_password_hash
 from extensions import db
@@ -78,35 +78,97 @@ class User(db.Model):
     Contains common fields used across all roles.
     """
     __tablename__ = 'users'
+    __mapper_args__ = {
+        'polymorphic_identity': 'USER',
+        'polymorphic_on': 'role',
+        'with_polymorphic': '*'
+    }
+    __table_args__ = (
+        Index('idx_user_search', 'email', 'role', 'is_active'),
+        Index('idx_user_verification', 'is_verified', 'primary_verification_method'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), nullable=False, default=UserRole.USER)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    primary_verification_method: Mapped[Optional[VerificationMethod]] = mapped_column(SQLEnum(VerificationMethod), nullable=True)
-    verification_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    role: Mapped[UserRole] = mapped_column(
+        SQLEnum(UserRole),
+        nullable=False,
+        default=UserRole.USER,
+        index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    primary_verification_method: Mapped[Optional[VerificationMethod]] = mapped_column(
+        SQLEnum(VerificationMethod),
+        nullable=True,
+        index=True
+    )
+    verification_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     verification_token_expires: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    email_change_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    email_change_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     email_change_new: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     email_change_expires: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
     
     # For tracking who created this user
-    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
-    created_as_role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), nullable=False, default=UserRole.SYSTEM)
-    created_by = relationship('User', remote_side=[id], backref='created_users', foreign_keys=[created_by_id])
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey('users.id', ondelete='SET NULL'),
+        nullable=True
+    )
+    created_as_role: Mapped[UserRole] = mapped_column(
+        SQLEnum(UserRole),
+        nullable=False,
+        default=UserRole.SYSTEM
+    )
 
     # Relationships
-    profile = relationship('UserProfile', back_populates='user', uselist=False, cascade='all, delete-orphan')
-    verification_methods = relationship('UserVerificationMethod', back_populates='user', cascade='all, delete-orphan')
-    assigned_customers = relationship('Customer', back_populates='assigned_to', foreign_keys='Customer.assigned_to_id')
-    activity_logs = relationship('ActivityLog', back_populates='user', cascade='all, delete-orphan')
+    created_by = relationship(
+        'User',
+        remote_side=[id],
+        backref='created_users',
+        foreign_keys=[created_by_id]
+    )
+    profile = relationship(
+        'UserProfile',
+        back_populates='user',
+        uselist=False,
+        cascade='all, delete-orphan',
+        lazy='joined'
+    )
+    verification_methods = relationship(
+        'UserVerificationMethod',
+        back_populates='user',
+        cascade='all, delete-orphan',
+        lazy='select'
+    )
+    assigned_customers = relationship(
+        'Customer',
+        back_populates='assigned_to',
+        foreign_keys='Customer.assigned_to_id',
+        lazy='select'
+    )
+    activity_logs = relationship(
+        'ActivityLog',
+        back_populates='user',
+        cascade='all, delete-orphan',
+        lazy='select'
+    )
 
     def set_password(self, password: str) -> None:
         """Set the password hash using Werkzeug's generate_password_hash."""
@@ -141,96 +203,156 @@ class User(db.Model):
 
     def to_dict(self):
         """Convert user model to dictionary with proper string serialization."""
-        try:
-            role_str = str(self.role.value) if self.role else None
-            created_as_role_str = str(self.created_as_role.value) if self.created_as_role else None
-            primary_verification_method_str = str(self.primary_verification_method.value) if self.primary_verification_method else None
-            
-            result = {
-                'id': self.id,
-                'uuid': self.uuid,
-                'email': self.email,
-                'role': role_str,
-                'is_active': self.is_active,
-                'is_verified': self.is_verified,
-                'primary_verification_method': primary_verification_method_str,
-                'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
-                'login_count': self.login_count,
-                'created_at': self.created_at.isoformat() if self.created_at else None,
-                'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-                'created_as_role': created_as_role_str
-            }
-
-            # Add profile data if exists
-            if self.profile:
-                result.update(self.profile.to_dict())
-
-            # Add verification methods
-            if self.verification_methods:
-                result['verification_methods'] = [method.to_dict() for method in self.verification_methods]
-
-            # Add assigned customers count for admin/user roles
-            if self.role in [UserRole.ADMIN, UserRole.USER]:
-                result['assigned_customers_count'] = len(self.assigned_customers)
-            
-            return result
-            
-        except Exception as e:
-            print(f"Error in to_dict for user {self.id}:")
-            print(f"  - Error: {str(e)}")
-            print(f"  - Role: {getattr(self, 'role', None)}")
-            print(f"  - Role type: {type(getattr(self, 'role', None))}")
-            raise
+        return {
+            'id': self.id,
+            'uuid': self.uuid,
+            'email': self.email,
+            'role': str(self.role),
+            'is_active': self.is_active,
+            'is_verified': self.is_verified,
+            'primary_verification_method': str(self.primary_verification_method) if self.primary_verification_method else None,
+            'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
+            'login_count': self.login_count,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_by_id': self.created_by_id,
+            'created_as_role': str(self.created_as_role),
+            'profile': self.profile.to_dict() if self.profile else None,
+            'verification_methods': [vm.to_dict() for vm in self.verification_methods] if self.verification_methods else []
+        }
 
 class UserProfile(db.Model):
-    """
-    Extended profile for ADMIN and USER roles.
-    Contains fields specific to these roles.
-    """
+    """Profile information for ADMIN and USER roles."""
     __tablename__ = 'user_profiles'
+    __table_args__ = (
+        Index('idx_profile_search', 'first_name', 'last_name', 'business_name'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), unique=True, nullable=False)
-    profile_picture: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    search_vector: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True)
+    first_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    business_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    street: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    zip_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    tin_trunk_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationship back to user
+
+    # Relationships
     user = relationship('User', back_populates='profile')
 
     def to_dict(self):
         """Convert profile to dictionary."""
         return {
-            'profile_picture': self.profile_picture,
-            'bio': self.bio
+            'id': self.id,
+            'user_id': self.user_id,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'business_name': self.business_name,
+            'street': self.street,
+            'city': self.city,
+            'state': self.state,
+            'zip_code': self.zip_code,
+            'country': self.country,
+            'phone_number': self.phone_number,
+            'tin_trunk_phone': self.tin_trunk_phone,
+            'meta_data': self.meta_data,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+    def update_address(self, street: str = None, city: str = None, state: str = None, 
+                      zip_code: str = None, country: str = None) -> None:
+        """Update address fields."""
+        if street is not None:
+            self.street = street
+        if city is not None:
+            self.city = city
+        if state is not None:
+            self.state = state
+        if zip_code is not None:
+            self.zip_code = zip_code
+        if country is not None:
+            self.country = country
+
+    def update_contact(self, phone_number: str = None, tin_trunk_phone: str = None) -> None:
+        """Update contact information."""
+        if phone_number is not None:
+            self.phone_number = phone_number
+        if tin_trunk_phone is not None:
+            self.tin_trunk_phone = tin_trunk_phone
+
+    def update_business(self, business_name: str = None) -> None:
+        """Update business information."""
+        if business_name is not None:
+            self.business_name = business_name
 
 class UserVerificationMethod(db.Model):
     """
-    Model for storing user verification methods.
+    Model for tracking user verification methods and their status.
+    Each user can have multiple verification methods (email, phone, etc.).
     """
     __tablename__ = 'user_verification_methods'
+    __table_args__ = (
+        Index('idx_verification_method', 'user_id', 'method_type', 'is_verified'),
+        Index('idx_verification_token', 'verification_token', 'token_expires'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id', ondelete='CASCADE'), index=True)
     method_type: Mapped[VerificationMethod] = mapped_column(SQLEnum(VerificationMethod), nullable=False)
-    identifier: Mapped[str] = mapped_column(String(255), nullable=False)  # email, phone number, etc.
+    identifier: Mapped[str] = mapped_column(String(120), nullable=False)  # email or phone number
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verification_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    token_expires: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_verification_attempt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    verification_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    verification_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationship back to user
+    # Relationships
     user = relationship('User', back_populates='verification_methods')
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def to_dict(self):
         """Convert verification method to dictionary."""
         return {
             'id': self.id,
-            'method_type': str(self.method_type.value),
+            'user_id': self.user_id,
+            'method_type': str(self.method_type),
             'identifier': self.identifier,
             'is_verified': self.is_verified,
+            'verified_at': self.verified_at.isoformat() if self.verified_at else None,
+            'last_verification_attempt': self.last_verification_attempt.isoformat() if self.last_verification_attempt else None,
+            'verification_attempts': self.verification_attempts,
+            'verification_data': self.verification_data,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
-        } 
+        }
+
+    def record_verification_attempt(self) -> None:
+        """Record a verification attempt."""
+        self.verification_attempts += 1
+        self.last_verification_attempt = datetime.utcnow()
+
+    def mark_as_verified(self) -> None:
+        """Mark the verification method as verified."""
+        self.is_verified = True
+        self.verified_at = datetime.utcnow()
+        self.verification_token = None
+        self.token_expires = None
+
+    def set_verification_token(self, token: str, expires_in_hours: int = 24) -> None:
+        """Set a new verification token with expiry."""
+        self.verification_token = token
+        self.token_expires = datetime.utcnow() + datetime.timedelta(hours=expires_in_hours) 

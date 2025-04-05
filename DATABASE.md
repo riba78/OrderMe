@@ -1029,3 +1029,188 @@ BEGIN
 END //
 DELIMITER ;
 ```
+
+## 6. Cloud Deployment Best Practices
+
+### Business Logic Implementation
+
+Instead of using stored procedures and functions, the following operations are implemented in the application layer:
+
+#### 1. User Creation
+```python
+def create_user(creator: User, new_user_data: dict) -> User:
+    """
+    Create a new user with specified role and verification method.
+    Implements the business logic previously in sp_create_user.
+    
+    Args:
+        creator: User object of the creating admin/user
+        new_user_data: Dict containing user details and verification preferences
+    """
+    # Validate creator permissions
+    if not creator.can_create_role(new_user_data['role']):
+        raise PermissionError("Insufficient permissions")
+    
+    # Create user with UUID
+    user = User(
+        uuid=uuid.uuid4(),
+        email=new_user_data['email'],
+        role=new_user_data['role'],
+        created_by_id=creator.id,
+        created_as_role=new_user_data['role'],
+        primary_verification_method=new_user_data['verification_method']
+    )
+    
+    # Log the creation
+    activity_log = ActivityLog(
+        user_id=creator.id,
+        action_type='user_create',
+        entity_type='user',
+        entity_id=user.id,
+        metadata={
+            'role': new_user_data['role'],
+            'verification_method': new_user_data['verification_method']
+        }
+    )
+    
+    return user, activity_log
+
+#### 2. Customer Assignment
+```python
+def assign_customer(customer_id: int, new_user_id: int, assigned_by: User) -> Tuple[Customer, ActivityLog]:
+    """
+    Assign a customer to a new user.
+    Implements the business logic previously in sp_assign_customer.
+    
+    Args:
+        customer_id: ID of the customer to reassign
+        new_user_id: ID of the user to assign the customer to
+        assigned_by: User performing the assignment
+    """
+    # Validate assignment permissions
+    if not assigned_by.can_assign_customers():
+        raise PermissionError("Insufficient permissions")
+    
+    customer = Customer.query.get(customer_id)
+    old_user_id = customer.assigned_to_id
+    
+    # Update assignment
+    customer.assigned_to_id = new_user_id
+    customer.assigned_at = datetime.utcnow()
+    customer.last_assigned_by_id = assigned_by.id
+    
+    # Log the change
+    activity_log = ActivityLog(
+        user_id=assigned_by.id,
+        action_type='customer_assign',
+        entity_type='customer',
+        entity_id=customer_id,
+        metadata={
+            'old_user_id': old_user_id,
+            'new_user_id': new_user_id
+        }
+    )
+    
+    return customer, activity_log
+```
+
+#### 3. Data Validation
+```python
+class Validator:
+    """
+    Validation logic previously implemented in database functions.
+    """
+    @staticmethod
+    def validate_phone(phone: str) -> bool:
+        """Validate phone number format."""
+        pattern = r'^\+?[1-9]\d{1,14}$'
+        return bool(re.match(pattern, phone))
+    
+    @staticmethod
+    def validate_email(email: str) -> bool:
+        """Validate email format."""
+        pattern = r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+        return bool(re.match(pattern, email))
+```
+
+### Cloud Deployment Considerations
+
+1. **Connection Management**
+```python
+from sqlalchemy.pool import QueuePool
+
+engine = create_engine(
+    DB_URL,
+    poolclass=QueuePool,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800
+)
+```
+
+2. **Error Handling and Retries**
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10)
+)
+def execute_db_operation(operation: Callable):
+    """Execute database operation with retries."""
+    try:
+        return operation()
+    except OperationalError as e:
+        logger.error(f"Database operation failed: {e}")
+        raise
+```
+
+3. **Migration Management**
+```python
+from alembic import command
+from alembic.config import Config
+
+def run_migrations():
+    """Apply database migrations."""
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+```
+
+4. **Monitoring and Logging**
+```python
+def log_db_metrics():
+    """Log database performance metrics."""
+    with engine.connect() as conn:
+        metrics = {
+            'pool_size': engine.pool.size(),
+            'checkedin': engine.pool.checkedin(),
+            'checkedout': engine.pool.checkedout(),
+            'overflow': engine.pool.overflow()
+        }
+        logger.info(f"Database metrics: {metrics}")
+```
+
+### Performance Optimization
+
+1. **Query Optimization**
+   - Use appropriate indexes
+   - Implement query caching
+   - Monitor and optimize slow queries
+
+2. **Connection Pooling**
+   - Configure appropriate pool sizes
+   - Monitor connection usage
+   - Implement connection timeouts
+
+3. **Data Partitioning**
+   - Implement table partitioning for large tables
+   - Use appropriate partition schemes
+   - Monitor partition sizes and performance
+
+4. **Backup and Recovery**
+   - Regular automated backups
+   - Point-in-time recovery capability
+   - Backup verification and testing
+
+These practices ensure better scalability, maintainability, and reliability when deploying to cloud environments like Azure or Google Cloud.

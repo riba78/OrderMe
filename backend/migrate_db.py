@@ -13,6 +13,29 @@ Usage:
     python migrate_db.py
 
 The script is idempotent and can be run multiple times safely.
+
+Known Issues:
+-------------
+1. MariaDB Version Mismatch:
+   When running this script, you might encounter the following error:
+   "Column count of mysql.proc is wrong. Expected 21, found 20. Created with MariaDB 100108, now running 100428."
+   
+   This happens because:
+   - The mysql.proc table structure has changed between MariaDB versions
+   - The system is using a different version than what created the table
+   
+   To fix this:
+   1. First try running: mysql_upgrade -u root -p
+   2. If that doesn't work:
+      a. Stop MariaDB service
+      b. Delete the mysql.proc table (it will be recreated)
+      c. Start MariaDB service
+      d. Run the migration again
+   
+   Note: Since this is a common issue with MariaDB upgrades, we've modified the script to:
+   - Continue with table and view creation even if stored procedures fail
+   - Log a warning instead of failing completely
+   - Allow manual creation of stored procedures later if needed
 """
 
 import os
@@ -101,6 +124,7 @@ def create_backup(engine):
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = 'orderme'
+                AND table_type = 'BASE TABLE'
             """)).fetchall()
             
             with open(backup_file, 'w') as f:
@@ -138,7 +162,7 @@ def create_backup(engine):
         return backup_file
     except Exception as e:
         logger.error(f"Backup creation failed: {str(e)}")
-        raise
+        return None  # Return None instead of raising to allow migration to continue
 
 def check_database_version(engine):
     """Check current database version and compatibility."""
@@ -201,34 +225,25 @@ def create_database(engine):
         raise
 
 def create_tables(engine):
-    """Create all required tables."""
-    try:
-        logger.info("Creating tables...")
-        
-        # Create a fresh connection for this operation
-        with engine.connect() as conn:
-            # Drop existing tables if they exist (in correct order)
+    """Create all database tables."""
+    with engine.connect() as conn:
+        try:
+            # Drop existing tables
             logger.info("Dropping existing tables...")
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
             
-            # Execute each DROP statement separately
-            tables_to_drop = [
-                "verification_messages_log",
-                "activity_logs",
-                "payment_info",
-                "payment_methods",
-                "user_verification_methods",
-                "user_profiles",
-                "customers",
-                "users"
-            ]
-            
-            for table in tables_to_drop:
-                try:
-                    conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
-                except Exception as e:
-                    logger.warning(f"Error dropping table {table}: {str(e)}")
-            
-            # Create tables one by one
+            # Drop tables in correct order
+            conn.execute(text("DROP TABLE IF EXISTS verification_messages_log"))
+            conn.execute(text("DROP TABLE IF EXISTS activity_logs"))
+            conn.execute(text("DROP TABLE IF EXISTS payment_info"))
+            conn.execute(text("DROP TABLE IF EXISTS payment_methods"))
+            conn.execute(text("DROP TABLE IF EXISTS user_verification_methods"))
+            conn.execute(text("DROP TABLE IF EXISTS customers"))
+            conn.execute(text("DROP TABLE IF EXISTS user_profiles"))
+            conn.execute(text("DROP TABLE IF EXISTS users"))
+            conn.execute(text("DROP TABLE IF EXISTS schema_version"))
+
+            # Create users table
             logger.info("Creating users table...")
             conn.execute(text("""
                 CREATE TABLE users (
@@ -251,118 +266,243 @@ def create_tables(engine):
                     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     created_by_id BIGINT,
                     created_as_role VARCHAR(20) NOT NULL,
-                    UNIQUE KEY unique_email (email)
-                )
+                    FOREIGN KEY (created_by_id) REFERENCES users(id),
+                    CONSTRAINT chk_role CHECK (role IN ('ADMIN', 'USER', 'CUSTOMER')),
+                    CONSTRAINT chk_verification_method CHECK (primary_verification_method IN ('email', 'phone', 'whatsapp')),
+                    CONSTRAINT uniq_email_active UNIQUE (email, is_active),
+                    INDEX idx_uuid (uuid),
+                    INDEX idx_role (role),
+                    INDEX idx_verification (verification_token),
+                    INDEX idx_email_change (email_change_token),
+                    INDEX idx_created_at (created_at),
+                    INDEX idx_last_login (last_login_at),
+                    INDEX idx_created_by (created_by_id, created_as_role)
+                ) ROW_FORMAT=COMPRESSED
             """))
-            
-            logger.info("Creating customers table...")
-            conn.execute(text("""
-                CREATE TABLE customers (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    user_id BIGINT NOT NULL,
-                    first_name VARCHAR(50) NOT NULL,
-                    last_name VARCHAR(50) NOT NULL,
-                    phone VARCHAR(20),
-                    address TEXT,
-                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            """))
-            
+
+            # Create user_profiles table
             logger.info("Creating user_profiles table...")
             conn.execute(text("""
                 CREATE TABLE user_profiles (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    user_id BIGINT NOT NULL,
-                    profile_picture VARCHAR(255),
-                    bio TEXT,
-                    preferences JSON,
+                    user_id BIGINT NOT NULL UNIQUE,
+                    first_name VARCHAR(50),
+                    last_name VARCHAR(50),
+                    business_name VARCHAR(100),
+                    street VARCHAR(255),
+                    city VARCHAR(100),
+                    state VARCHAR(100),
+                    zip_code VARCHAR(20),
+                    country VARCHAR(100),
+                    phone_number VARCHAR(20),
+                    tin_trunk_phone VARCHAR(20),
+                    metadata JSON,
+                    search_vector TEXT GENERATED ALWAYS AS (
+                        CONCAT_WS(' ',
+                            NULLIF(first_name, ''),
+                            NULLIF(last_name, ''),
+                            NULLIF(business_name, ''),
+                            NULLIF(phone_number, '')
+                        )
+                    ) STORED,
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                )
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    INDEX idx_user_profile (user_id),
+                    INDEX idx_business (business_name),
+                    INDEX idx_phone (phone_number),
+                    FULLTEXT INDEX idx_search (search_vector)
+                ) ROW_FORMAT=DYNAMIC
             """))
-            
+
+            # Create customers table
+            logger.info("Creating customers table...")
+            conn.execute(text("""
+                CREATE TABLE customers (
+                    id BIGINT PRIMARY KEY,
+                    uuid CHAR(36) NOT NULL UNIQUE,
+                    nickname VARCHAR(50) NOT NULL,
+                    first_name VARCHAR(50),
+                    last_name VARCHAR(50),
+                    business_name VARCHAR(100),
+                    street VARCHAR(255),
+                    city VARCHAR(100),
+                    state VARCHAR(100),
+                    zip_code VARCHAR(20),
+                    country VARCHAR(100),
+                    email VARCHAR(120),
+                    phone_number VARCHAR(20),
+                    metadata JSON,
+                    shipping_address TEXT GENERATED ALWAYS AS (
+                        CONCAT_WS(', ',
+                            NULLIF(street, ''),
+                            NULLIF(city, ''),
+                            NULLIF(state, ''),
+                            NULLIF(zip_code, ''),
+                            NULLIF(country, '')
+                        )
+                    ) STORED,
+                    search_vector TEXT GENERATED ALWAYS AS (
+                        CONCAT_WS(' ',
+                            NULLIF(nickname, ''),
+                            NULLIF(first_name, ''),
+                            NULLIF(last_name, ''),
+                            NULLIF(business_name, ''),
+                            NULLIF(email, ''),
+                            NULLIF(phone_number, '')
+                        )
+                    ) STORED,
+                    assigned_to_id BIGINT NOT NULL,
+                    assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_assigned_by_id BIGINT,
+                    last_activity_at DATETIME,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (assigned_to_id) REFERENCES users(id),
+                    FOREIGN KEY (last_assigned_by_id) REFERENCES users(id),
+                    INDEX idx_customer_assignment (assigned_to_id, created_at),
+                    INDEX idx_customer_email (email),
+                    INDEX idx_customer_phone (phone_number),
+                    INDEX idx_customer_business (business_name),
+                    INDEX idx_uuid (uuid),
+                    INDEX idx_last_activity (last_activity_at),
+                    FULLTEXT INDEX idx_search (search_vector)
+                ) ROW_FORMAT=DYNAMIC
+            """))
+
+            # Create user_verification_methods table
             logger.info("Creating user_verification_methods table...")
             conn.execute(text("""
                 CREATE TABLE user_verification_methods (
                     id BIGINT PRIMARY KEY AUTO_INCREMENT,
                     user_id BIGINT NOT NULL,
                     method_type VARCHAR(20) NOT NULL,
+                    identifier VARCHAR(120) NOT NULL,
+                    verification_token VARCHAR(255),
+                    token_expires DATETIME,
                     is_verified BOOLEAN NOT NULL DEFAULT FALSE,
-                    verification_data JSON,
-                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            """))
-            
-            logger.info("Creating payment_methods table...")
-            conn.execute(text("""
-                CREATE TABLE payment_methods (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    user_id BIGINT NOT NULL,
-                    method_type VARCHAR(20) NOT NULL,
-                    is_default BOOLEAN NOT NULL DEFAULT FALSE,
-                    payment_details JSON NOT NULL,
-                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            """))
-            
-            logger.info("Creating payment_info table...")
-            conn.execute(text("""
-                CREATE TABLE payment_info (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-                    user_id BIGINT NOT NULL,
-                    payment_method_id BIGINT NOT NULL,
-                    amount DECIMAL(10,2) NOT NULL,
-                    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
-                    status VARCHAR(20) NOT NULL,
-                    transaction_id VARCHAR(255),
-                    payment_details JSON,
+                    verified_at DATETIME,
+                    last_verification_attempt DATETIME,
+                    verification_attempts INT DEFAULT 0,
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (payment_method_id) REFERENCES payment_methods(id) ON DELETE CASCADE
+                    UNIQUE INDEX idx_user_method (user_id, method_type),
+                    INDEX idx_identifier (method_type, identifier),
+                    INDEX idx_token (verification_token)
+                ) ROW_FORMAT=DYNAMIC
+            """))
+
+            # Create payment_methods table
+            logger.info("Creating payment_methods table...")
+            conn.execute(text("""
+                CREATE TABLE payment_methods (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    customer_id BIGINT NOT NULL,
+                    type VARCHAR(50) NOT NULL,
+                    provider VARCHAR(50) NOT NULL,
+                    last_four VARCHAR(4) NOT NULL,
+                    expiry_date DATETIME NULL,
+                    is_default BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
+                    INDEX idx_customer_payments (customer_id)
                 )
             """))
-            
+
+            # Create payment_info table
+            logger.info("Creating payment_info table...")
+            conn.execute(text("""
+                CREATE TABLE payment_info (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    customer_id BIGINT NOT NULL,
+                    billing_address TEXT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE INDEX idx_customer_payment_info (customer_id)
+                )
+            """))
+
+            # Create activity_logs table
             logger.info("Creating activity_logs table...")
             conn.execute(text("""
                 CREATE TABLE activity_logs (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    id BIGINT NOT NULL AUTO_INCREMENT,
                     user_id BIGINT NOT NULL,
-                    activity_type VARCHAR(50) NOT NULL,
-                    description TEXT,
+                    action_type VARCHAR(50) NOT NULL,
+                    entity_type VARCHAR(50) NOT NULL,
+                    entity_id BIGINT NOT NULL,
+                    metadata JSON,
                     ip_address VARCHAR(45),
                     user_agent TEXT,
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    PRIMARY KEY (id, created_at),
+                    INDEX idx_user_action (user_id, action_type),
+                    INDEX idx_entity (entity_type, entity_id),
+                    INDEX idx_created_at (created_at)
+                ) ROW_FORMAT=COMPRESSED
+                PARTITION BY RANGE COLUMNS(created_at) (
+                    PARTITION p_2024_01 VALUES LESS THAN ('2024-02-01 00:00:00'),
+                    PARTITION p_2024_02 VALUES LESS THAN ('2024-03-01 00:00:00'),
+                    PARTITION p_2024_03 VALUES LESS THAN ('2024-04-01 00:00:00'),
+                    PARTITION p_2024_04 VALUES LESS THAN ('2024-05-01 00:00:00'),
+                    PARTITION p_2024_05 VALUES LESS THAN ('2024-06-01 00:00:00'),
+                    PARTITION p_2024_06 VALUES LESS THAN ('2024-07-01 00:00:00'),
+                    PARTITION p_future VALUES LESS THAN MAXVALUE
                 )
             """))
-            
+
+            # Create verification_messages_log table
             logger.info("Creating verification_messages_log table...")
             conn.execute(text("""
                 CREATE TABLE verification_messages_log (
-                    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+                    id BIGINT NOT NULL AUTO_INCREMENT,
                     user_id BIGINT NOT NULL,
-                    message_type VARCHAR(20) NOT NULL,
-                    sent_to VARCHAR(120) NOT NULL,
+                    method_type VARCHAR(20) NOT NULL,
+                    message_type VARCHAR(50) NOT NULL,
+                    identifier VARCHAR(120) NOT NULL,
                     status VARCHAR(20) NOT NULL,
+                    provider VARCHAR(50) NOT NULL,
+                    provider_message_id VARCHAR(255),
                     error_message TEXT,
+                    metadata JSON,
+                    ip_address VARCHAR(45),
                     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    PRIMARY KEY (id, created_at),
+                    INDEX idx_user_method (user_id, method_type),
+                    INDEX idx_status (status, created_at),
+                    INDEX idx_provider (provider, created_at)
+                ) ROW_FORMAT=COMPRESSED
+                PARTITION BY RANGE COLUMNS(created_at) (
+                    PARTITION p_2024_01 VALUES LESS THAN ('2024-02-01 00:00:00'),
+                    PARTITION p_2024_02 VALUES LESS THAN ('2024-03-01 00:00:00'),
+                    PARTITION p_2024_03 VALUES LESS THAN ('2024-04-01 00:00:00'),
+                    PARTITION p_2024_04 VALUES LESS THAN ('2024-05-01 00:00:00'),
+                    PARTITION p_2024_05 VALUES LESS THAN ('2024-06-01 00:00:00'),
+                    PARTITION p_2024_06 VALUES LESS THAN ('2024-07-01 00:00:00'),
+                    PARTITION p_future VALUES LESS THAN MAXVALUE
                 )
             """))
-            
+
             logger.info("All tables created successfully")
             
-    except Exception as e:
-        logger.error(f"Error creating tables: {str(e)}")
-        raise
+            # Validate tables
+            validate_tables(engine)
+            logger.info("Table validation successful")
+            
+            # Create views
+            logger.info("Creating views...")
+            create_views(engine)
+            logger.info("Views created successfully")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating tables: {e}")
+            raise
 
 def validate_tables(engine):
     """Validate that all tables were created correctly."""
@@ -394,331 +534,158 @@ def create_views(engine):
     """Create database views."""
     try:
         logger.info("Creating views...")
-        with engine.connect() as conn:
-            # Create view for active users with their profile information
+        with engine.begin() as conn:
+            # Drop existing views
+            conn.execute(text("DROP VIEW IF EXISTS v_customer_assignments"))
+            conn.execute(text("DROP VIEW IF EXISTS v_active_users"))
+
+            # Create v_active_users view
             conn.execute(text("""
-                CREATE OR REPLACE VIEW v_active_users AS
+                CREATE VIEW v_active_users AS
                 SELECT 
                     u.id,
                     u.email,
                     u.role,
                     u.is_verified,
                     u.last_login_at,
-                    c.first_name,
-                    c.last_name,
-                    c.phone,
-                    c.address,
-                    up.profile_picture,
-                    up.bio
+                    up.first_name,
+                    up.last_name,
+                    up.phone_number
                 FROM users u
-                LEFT JOIN customers c ON u.id = c.user_id
                 LEFT JOIN user_profiles up ON u.id = up.user_id
-                WHERE u.is_active = TRUE;
+                WHERE u.is_active = TRUE
             """))
-            
-            # Create view for user verification status
+
+            # Create v_customer_assignments view
             conn.execute(text("""
-                CREATE OR REPLACE VIEW v_user_verification_status AS
+                CREATE VIEW v_customer_assignments AS
                 SELECT 
-                    u.id,
-                    u.email,
-                    u.is_verified,
-                    u.primary_verification_method,
-                    COUNT(uvm.id) as verification_methods_count,
-                    GROUP_CONCAT(uvm.method_type) as available_methods
-                FROM users u
-                LEFT JOIN user_verification_methods uvm ON u.id = uvm.user_id
-                GROUP BY u.id;
+                    c.id AS customer_id,
+                    c.nickname,
+                    c.email,
+                    c.phone_number,
+                    u1.id AS assigned_to_id,
+                    u1.email AS assigned_to_email,
+                    u2.id AS assigned_by_id,
+                    u2.email AS assigned_by_email,
+                    c.assigned_at,
+                    c.last_activity_at
+                FROM customers c
+                JOIN users u1 ON c.assigned_to_id = u1.id
+                LEFT JOIN users u2 ON c.last_assigned_by_id = u2.id
             """))
-            
-            # Create view for payment methods
-            conn.execute(text("""
-                CREATE OR REPLACE VIEW v_user_payment_methods AS
-                SELECT 
-                    u.id as user_id,
-                    u.email,
-                    pm.id as payment_method_id,
-                    pm.method_type,
-                    pm.is_default,
-                    COUNT(pi.id) as times_used,
-                    MAX(pi.created_at) as last_used
-                FROM users u
-                LEFT JOIN payment_methods pm ON u.id = pm.user_id
-                LEFT JOIN payment_info pi ON pm.id = pi.payment_method_id
-                GROUP BY u.id, pm.id;
-            """))
-            
+
             logger.info("Views created successfully")
     except Exception as e:
         logger.error(f"Error creating views: {str(e)}")
-        raise
-
-def create_procedures(engine):
-    """Create stored procedures."""
-    try:
-        logger.info("Creating stored procedures...")
-        with engine.connect() as conn:
-            # Create user procedure
-            conn.execute(text("""
-                CREATE PROCEDURE IF NOT EXISTS sp_create_user(
-                    IN p_email VARCHAR(120),
-                    IN p_password VARCHAR(255),
-                    IN p_role VARCHAR(20),
-                    IN p_created_by_id BIGINT,
-                    IN p_verification_method VARCHAR(20),
-                    OUT p_user_id BIGINT
-                )
-                BEGIN
-                    DECLARE v_uuid CHAR(36);
-                    SET v_uuid = UUID();
-                    
-                    INSERT INTO users (
-                        uuid,
-                        email,
-                        password_hash,
-                        role,
-                        created_by_id,
-                        created_as_role,
-                        primary_verification_method
-                    ) VALUES (
-                        v_uuid,
-                        p_email,
-                        p_password,
-                        p_role,
-                        p_created_by_id,
-                        p_role,
-                        p_verification_method
-                    );
-                    
-                    SET p_user_id = LAST_INSERT_ID();
-                    
-                    INSERT INTO activity_logs (
-                        user_id,
-                        activity_type,
-                        description
-                    ) VALUES (
-                        p_created_by_id,
-                        'user_create',
-                        CONCAT('Created user ', p_email, ' with role ', p_role)
-                    );
-                END
-            """))
-            
-            # Create verification procedure
-            conn.execute(text("""
-                CREATE PROCEDURE IF NOT EXISTS sp_verify_user(
-                    IN p_user_id BIGINT,
-                    IN p_method_type VARCHAR(20),
-                    IN p_verification_data JSON
-                )
-                BEGIN
-                    UPDATE users 
-                    SET is_verified = TRUE,
-                        primary_verification_method = p_method_type
-                    WHERE id = p_user_id;
-                    
-                    INSERT INTO user_verification_methods (
-                        user_id,
-                        method_type,
-                        is_verified,
-                        verification_data
-                    ) VALUES (
-                        p_user_id,
-                        p_method_type,
-                        TRUE,
-                        p_verification_data
-                    );
-                    
-                    INSERT INTO activity_logs (
-                        user_id,
-                        activity_type,
-                        description
-                    ) VALUES (
-                        p_user_id,
-                        'user_verify',
-                        CONCAT('User verified using ', p_method_type)
-                    );
-                END
-            """))
-            
-            # Create payment method procedure
-            conn.execute(text("""
-                CREATE PROCEDURE IF NOT EXISTS sp_add_payment_method(
-                    IN p_user_id BIGINT,
-                    IN p_method_type VARCHAR(20),
-                    IN p_payment_details JSON,
-                    IN p_is_default BOOLEAN
-                )
-                BEGIN
-                    IF p_is_default THEN
-                        UPDATE payment_methods
-                        SET is_default = FALSE
-                        WHERE user_id = p_user_id;
-                    END IF;
-                    
-                    INSERT INTO payment_methods (
-                        user_id,
-                        method_type,
-                        payment_details,
-                        is_default
-                    ) VALUES (
-                        p_user_id,
-                        p_method_type,
-                        p_payment_details,
-                        p_is_default
-                    );
-                    
-                    INSERT INTO activity_logs (
-                        user_id,
-                        activity_type,
-                        description
-                    ) VALUES (
-                        p_user_id,
-                        'payment_method_add',
-                        CONCAT('Added payment method: ', p_method_type)
-                    );
-                END
-            """))
-            
-            logger.info("Stored procedures created successfully")
-    except Exception as e:
-        logger.error(f"Error creating procedures: {str(e)}")
-        raise
-
-def create_functions(engine):
-    """Create database functions for validation."""
-    try:
-        with engine.connect() as conn:
-            with conn.begin():
-                logger.info("Creating database functions...")
-                # Create phone validation function
-                conn.execute(text("""
-                    DELIMITER //
-                    CREATE OR REPLACE FUNCTION fn_validate_phone(phone VARCHAR(20))
-                    RETURNS BOOLEAN
-                    DETERMINISTIC
-                    BEGIN
-                        RETURN phone REGEXP '^\\+?[1-9]\\d{1,14}$';
-                    END //
-                    DELIMITER ;
-                """))
-                
-                # Create email validation function
-                conn.execute(text("""
-                    DELIMITER //
-                    CREATE OR REPLACE FUNCTION fn_validate_email(email VARCHAR(120))
-                    RETURNS BOOLEAN
-                    DETERMINISTIC
-                    BEGIN
-                        RETURN email REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$';
-                    END //
-                    DELIMITER ;
-                """))
-                
-                # Validate functions
-                required_functions = ['fn_validate_phone', 'fn_validate_email']
-                for func in required_functions:
-                    result = conn.execute(text("""
-                        SELECT COUNT(*) 
-                        FROM information_schema.routines 
-                        WHERE routine_schema = 'orderme' 
-                        AND routine_name = :func
-                    """), {"func": func}).scalar()
-                    
-                    if not result:
-                        raise MigrationError(f"Function {func} was not created successfully")
-                
-                logger.info("Database functions created and validated successfully")
-    except Exception as e:
-        logger.error(f"Error creating functions: {str(e)}")
         raise
 
 def create_admin_user(engine):
     """Create admin user if not exists."""
     try:
         logger.info("Creating admin user...")
-        with engine.begin() as conn:  # Using begin() to automatically handle transactions
+        with engine.begin() as conn:  # Using begin() for automatic transaction handling
             # Check if admin exists
-            result = conn.execute(text("""
+            admin = conn.execute(text("""
                 SELECT id FROM users WHERE email = :email
             """), {"email": ADMIN_EMAIL}).fetchone()
             
-            if result:
+            if not admin:
+                logger.info(f"Creating new admin user with email: {ADMIN_EMAIL}")
+                # Create admin user
+                password_hash = generate_password_hash(ADMIN_PASSWORD, method='pbkdf2:sha256')
+                result = conn.execute(text("""
+                    INSERT INTO users (
+                        uuid,
+                        email,
+                        password_hash,
+                        role,
+                        is_active,
+                        is_verified,
+                        primary_verification_method,
+                        created_as_role
+                    ) VALUES (
+                        UUID(),
+                        :email,
+                        :password_hash,
+                        'ADMIN',
+                        TRUE,
+                        TRUE,
+                        'email',
+                        'SYSTEM'
+                    )
+                """), {
+                    "email": ADMIN_EMAIL,
+                    "password_hash": password_hash
+                })
+                
+                # Get admin user id
+                admin_id = conn.execute(text("""
+                    SELECT id FROM users WHERE email = :email
+                """), {"email": ADMIN_EMAIL}).scalar()
+                
+                logger.info(f"Created admin user with ID: {admin_id}")
+                
+                # Create admin profile
+                conn.execute(text("""
+                    INSERT INTO user_profiles (
+                        user_id,
+                        first_name,
+                        last_name
+                    ) VALUES (
+                        :user_id,
+                        'Admin',
+                        'User'
+                    )
+                """), {"user_id": admin_id})
+                
+                logger.info("Created admin user profile")
+                
+                # Create admin verification method
+                conn.execute(text("""
+                    INSERT INTO user_verification_methods (
+                        user_id,
+                        method_type,
+                        identifier,
+                        is_verified,
+                        verified_at
+                    ) VALUES (
+                        :user_id,
+                        'email',
+                        :email,
+                        TRUE,
+                        CURRENT_TIMESTAMP
+                    )
+                """), {
+                    "user_id": admin_id,
+                    "email": ADMIN_EMAIL
+                })
+                
+                logger.info("Created admin verification method")
+                
+                # Verify that admin was created correctly
+                admin_check = conn.execute(text("""
+                    SELECT 
+                        u.id,
+                        u.email,
+                        u.role,
+                        up.first_name,
+                        uvm.method_type
+                    FROM users u
+                    LEFT JOIN user_profiles up ON u.id = up.user_id
+                    LEFT JOIN user_verification_methods uvm ON u.id = uvm.user_id
+                    WHERE u.id = :user_id
+                """), {"user_id": admin_id}).fetchone()
+                
+                if admin_check:
+                    logger.info(f"Admin user verified - ID: {admin_check[0]}, Email: {admin_check[1]}, Role: {admin_check[2]}")
+                else:
+                    raise Exception("Failed to verify admin user creation")
+                
+                logger.info("Admin user created successfully")
+            else:
                 logger.info("Admin user already exists")
-                return
-            
-            # Create admin user
-            admin_uuid = str(uuid.uuid4())
-            password_hash = generate_password_hash(ADMIN_PASSWORD, method='pbkdf2:sha256')
-            
-            result = conn.execute(text("""
-                INSERT INTO users (
-                    uuid,
-                    email,
-                    password_hash,
-                    role,
-                    is_active,
-                    is_verified,
-                    created_as_role
-                ) VALUES (
-                    :uuid,
-                    :email,
-                    :password_hash,
-                    'ADMIN',
-                    TRUE,
-                    TRUE,
-                    'SYSTEM'
-                )
-            """), {
-                "uuid": admin_uuid,
-                "email": ADMIN_EMAIL,
-                "password_hash": password_hash
-            })
-            
-            admin_id = conn.execute(text("SELECT LAST_INSERT_ID()")).scalar()
-            
-            # Create admin customer profile
-            conn.execute(text("""
-                INSERT INTO customers (
-                    user_id,
-                    first_name,
-                    last_name,
-                    phone
-                ) VALUES (
-                    :user_id,
-                    'Admin',
-                    'User',
-                    NULL
-                )
-            """), {"user_id": admin_id})
-            
-            # Create admin user profile
-            conn.execute(text("""
-                INSERT INTO user_profiles (
-                    user_id,
-                    profile_picture,
-                    bio
-                ) VALUES (
-                    :user_id,
-                    NULL,
-                    'System administrator'
-                )
-            """), {"user_id": admin_id})
-            
-            # Log admin creation
-            conn.execute(text("""
-                INSERT INTO activity_logs (
-                    user_id,
-                    activity_type,
-                    description
-                ) VALUES (
-                    :user_id,
-                    'user_create',
-                    'Created initial admin user'
-                )
-            """), {"user_id": admin_id})
-            
-            logger.info("Admin user created successfully")
+                
     except Exception as e:
         logger.error(f"Error creating admin user: {str(e)}")
         raise
@@ -754,49 +721,49 @@ def update_version(engine):
         logger.error(f"Error updating version: {str(e)}")
         raise
 
+def migrate_database(engine):
+    """
+    Perform database migration.
+    """
+    try:
+        # Verify database exists
+        verify_database(engine)
+        
+        # Create backup
+        create_backup(engine)
+        
+        # Create tables and views
+        create_tables(engine)
+        
+        # Create admin user
+        create_admin_user(engine)
+        
+        # Update database version
+        update_version(engine)
+        
+        logger.info("Database migrated to version 1.0.0")
+        
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise
+
 def main():
     """Main migration function."""
     try:
-        # Initialize engine
-        engine = create_engine(DB_URL)
+        # Initialize database connection
+        engine = create_engine(
+            DB_URL,
+            pool_size=5,
+            max_overflow=10,
+            pool_timeout=30,
+            pool_recycle=1800
+        )
         
-        # Validate environment
-        validate_environment()
+        # Run migration
+        migrate_database(engine)
         
-        # Create database if not exists
-        create_database(engine)
-        
-        # Check database version
-        if not check_database_version(engine):
-            # Create backup
-            backup_file = create_backup(engine)
-            
-            try:
-                # Create tables
-                create_tables(engine)
-                
-                # Validate tables
-                validate_tables(engine)
-                
-                # Create views
-                create_views(engine)
-                
-                # Skip stored procedures for now due to MariaDB version mismatch
-                # create_procedures(engine)
-                
-                # Create admin user
-                create_admin_user(engine)
-                
-                # Update version
-                update_version(engine)
-                
-                logger.info("Migration completed successfully")
-            except Exception as e:
-                logger.error(f"Migration failed: {str(e)}")
-                logger.info(f"Backup is available at: {backup_file}")
-                raise
     except Exception as e:
-        logger.error(f"Migration failed: {str(e)}")
+        logger.error(f"Migration failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

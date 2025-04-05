@@ -4,14 +4,34 @@ A modern web application for order management with role-based access control, bu
 
 ## Features
 
-- 🔐 Role-based authentication (Admin/User/Customer)
-- 🔑 JWT-based authentication
-- 🌐 Social authentication (Google, Facebook)
-- 👥 User management
-- 📊 Admin dashboard
-- 🛒 Order management
-- 💳 Customer management
+- 🔐 Enhanced Role-based Authentication
+  - Admin/User/Customer roles with polymorphic inheritance
+  - Multi-method verification (Email, Phone, WhatsApp)
+  - Social authentication (Google, Facebook)
+  - Activity logging and audit trail
+- 🔑 Advanced Security
+  - JWT-based authentication
+  - Rate limiting and verification tracking
+  - Token expiration management
+- 👥 Comprehensive User Management
+  - User profiles with business information
+  - Verification status tracking
+  - Social profile integration
+  - Activity logging
+- 📊 Admin Dashboard
+  - User activity monitoring
+  - Assignment management
+  - Full audit logging
+- 💳 Enhanced Customer Management
+  - Customer assignment system
+  - Assignment history tracking
+  - Computed fields for addresses
+  - Full-text search capabilities
 - 🎨 Modern UI with responsive design
+- 📦 Optimized Database Structure
+  - Table partitioning for performance
+  - Computed fields for search
+  - Full audit logging system
 
 ## Tech Stack
 
@@ -27,6 +47,10 @@ A modern web application for order management with role-based access control, bu
 - Flask (Python Web Framework)
 - SQLAlchemy (ORM)
 - MySQL (Database)
+  - Optimized table structure
+  - Full-text search support
+  - Table partitioning
+  - Computed fields
 - JWT (Authentication)
 - Flask-Migrate (Database Migrations)
 
@@ -34,7 +58,7 @@ A modern web application for order management with role-based access control, bu
 
 - Node.js (v14 or higher)
 - Python 3.8+
-- MySQL
+- MySQL 8.0+
 
 ## Installation
 
@@ -55,13 +79,17 @@ pip install -r requirements.txt
 3. Configure environment variables:
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env with your configuration including:
+# - Database connection
+# - OAuth credentials (Google, Facebook)
+# - Verification methods
+# - Rate limiting settings
+# - Activity logging configuration
 ```
 
 4. Initialize the database:
 ```bash
-flask db upgrade
-python recreate_db.py
+python migrate_db.py
 ```
 
 ### Frontend Setup
@@ -110,7 +138,13 @@ Password: admin123
 .
 ├── backend/
 │   ├── auth/           # Authentication utilities
+│   │   ├── social.py   # Social auth handlers
+│   │   └── utils.py    # Auth utilities
 │   ├── models/         # Database models
+│   │   ├── user.py     # User model with polymorphic inheritance
+│   │   ├── customer.py # Customer model
+│   │   ├── verification.py # Verification methods
+│   │   └── activity_log.py # Activity logging
 │   ├── routes/         # API routes
 │   ├── migrations/     # Database migrations
 │   └── app.py         # Application entry point
@@ -124,8 +158,34 @@ Password: admin123
 │   │   ├── utils/     # Utilities
 │   │   └── views/     # Page components
 │   └── public/        # Public assets
+├── DATABASE.md        # Complete database documentation
+├── MIGRATION_UPDATES.md # Migration guide
 └── TROUBLESHOOTING.md # Troubleshooting guide
 ```
+
+## Database Features
+
+### Core Tables
+- Users (Base table with polymorphic inheritance)
+- User Profiles (Business and contact information)
+- Customers (Polymorphic child of Users)
+- User Verification Methods (Multi-method verification)
+- Activity Logs (Comprehensive audit trail)
+- Verification Messages Log (Verification tracking)
+
+### Key Features
+- Polymorphic user inheritance
+- Multi-method verification system
+- Computed fields for optimization
+- Full-text search capabilities
+- Table partitioning for performance
+- Comprehensive activity logging
+- Social authentication integration
+- Customer assignment tracking
+
+For detailed database documentation, see:
+- [DATABASE.md](DATABASE.md) - Complete database documentation
+- [MIGRATION_UPDATES.md](MIGRATION_UPDATES.md) - Migration guide
 
 ## Development
 

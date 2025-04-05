@@ -7,105 +7,225 @@ This document outlines the necessary updates to the codebase following the datab
 ### Models
 
 1. **`models/user.py`**
-   - **Why Update?**: New fields and relationships added to support enhanced user management and verification
-   - **Changes Required**:
-     - Add `primary_verification_method` field
-     - Add `created_as_role` field
-     - Add relationship with `user_verification_methods`
-     - Update role validation
-     - Add verification status tracking
+   - **Why Update?**: Enhanced user management, verification, and security features
+   - **Changes Made**:
+     - Added composite indexes for search and verification
+     - Added proper foreign key constraints with `ondelete` rules
+     - Enhanced `UserRole` enum with `SYSTEM` role
+     - Added `VerificationMethod` enum
+     - Added verification tracking fields
+     - Added audit fields (created_at, updated_at)
+     - Added relationship tracking (created_by)
+     - Added proper nullable constraints
+     - Added metadata fields for extensibility
 
 2. **`models/customer.py`**
-   - **Why Update?**: New computed fields and relationships for improved customer management
-   - **Changes Required**:
-     - Add `shipping_address` computed field
-     - Add `search_vector` computed field
-     - Add relationships with `assigned_to` and `last_assigned_by`
-     - Update validation rules
+   - **Why Update?**: Enhanced customer management and payment handling
+   - **Changes Made**:
+     - Added composite indexes for search and assignment
+     - Enhanced `PaymentMethod` model with additional fields
+     - Enhanced `PaymentInfo` model with detailed billing fields
+     - Added proper foreign key constraints with `ondelete` rules
+     - Added metadata fields for extensibility
+     - Added search optimization fields
+     - Added assignment tracking
+     - Added proper nullable constraints
 
-3. **`models/user_profile.py`**
-   - **Why Update?**: New fields for enhanced profile management
-   - **Changes Required**:
-     - Add `search_vector` computed field
-     - Add business information fields
-     - Update validation rules
+3. **`models/activity_log.py`**
+   - **Why Create?**: Track user actions with efficient data management
+   - **Features Implemented**:
+     - Range partitioning by created_at
+     - Composite primary key for partitioning
+     - Proper indexing for performance
+     - Metadata fields for extensibility
+     - IP address and user agent tracking
+     - Proper foreign key constraints
+     - Proper nullable constraints
 
-4. **New Models to Create**:
-   - **`models/activity_log.py`**
-     - **Why Create?**: New table for tracking user actions
-     - **Required Fields**:
-       - `user_id`
-       - `action_type`
-       - `entity_type`
-       - `entity_id`
-       - `metadata`
-       - `ip_address`
-       - `user_agent`
+4. **`models/verification_message_log.py`**
+   - **Why Create?**: Track verification attempts with efficient data management
+   - **Features Implemented**:
+     - Range partitioning by created_at
+     - Composite primary key for partitioning
+     - Proper indexing for performance
+     - Provider information tracking
+     - Status tracking
+     - Error message tracking
+     - Metadata fields for extensibility
 
-   - **`models/verification_message_log.py`**
-     - **Why Create?**: New table for tracking verification attempts
-     - **Required Fields**:
-       - `user_id`
-       - `method_type`
-       - `message_type`
-       - `identifier`
-       - `status`
-       - `provider`
-       - `provider_message_id`
+### Database Schema Changes
 
-### Routes
+1. **Partitioned Tables**:
+   - `activity_logs`: Range partitioning by created_at
+   - `verification_messages_log`: Range partitioning by created_at
+   - Optimized for efficient data cleanup and archival
+   - Enhanced query performance for date-based searches
 
-1. **`routes/auth.py`**
-   - **Why Update?**: Support for multiple verification methods
-   - **Changes Required**:
-     - Update registration endpoint to handle multiple verification methods
-     - Add verification method selection
-     - Implement verification message logging
-     - Update token generation and validation
+2. **Indexing Strategy**:
+   - Composite indexes for frequently used queries
+   - Search optimization indexes
+   - Foreign key indexes
+   - Verification status indexes
+   - Assignment tracking indexes
 
-2. **`routes/user.py`**
-   - **Why Update?**: Enhanced user management features
-   - **Changes Required**:
-     - Update user creation to track `created_as_role`
-     - Add verification method management endpoints
-     - Implement activity logging
-     - Update user search functionality
+3. **Data Integrity**:
+   - Proper foreign key constraints with appropriate ondelete rules
+   - NOT NULL constraints where appropriate
+   - Unique constraints for critical fields
+   - Default values for required fields
 
-3. **`routes/customer.py`**
-   - **Why Update?**: Improved customer management and search
-   - **Changes Required**:
-     - Update customer creation with new fields
-     - Implement customer assignment tracking
-     - Add search functionality using computed fields
-     - Update customer update endpoints
+4. **Extensibility**:
+   - JSON metadata fields for future extensions
+   - Search vector fields for text search
+   - Computed fields for optimization
 
-### Configuration
+### Required Code Updates
 
-1. **`config.py`**
-   - **Why Update?**: New configuration options needed
-   - **Changes Required**:
-     - Add verification method settings
-     - Add rate limiting configuration
-     - Add activity logging settings
-     - Update database configuration
+1. **Authentication System**:
+   ```python
+   # Update token generation to include verification status
+   def create_access_token(user_id: int) -> str:
+       user = User.query.get(user_id)
+       return jwt.encode({
+           'sub': str(user_id),
+           'role': str(user.role),
+           'is_verified': user.is_verified,
+           'exp': datetime.utcnow() + timedelta(days=1)
+       }, settings.SECRET_KEY)
+   ```
 
-2. **`.env`**
-   - **Why Update?**: New environment variables needed
-   - **Changes Required**:
-     - Add `VERIFICATION_METHODS`
-     - Add `RATE_LIMIT_ATTEMPTS`
-     - Add `RATE_LIMIT_WINDOW`
-     - Add `ACTIVITY_LOG_ENABLED`
+2. **User Management**:
+   ```python
+   # Example of creating a new user with verification
+   def create_user(email: str, password: str, role: UserRole) -> User:
+       user = User(
+           uuid=str(uuid.uuid4()),
+           email=email,
+           role=role,
+           created_as_role=UserRole.SYSTEM
+       )
+       user.set_password(password)
+       user.profile = UserProfile()
+       return user
+   ```
 
-### Authentication
+3. **Activity Logging**:
+   ```python
+   # Example of logging user activity
+   def log_user_activity(user_id: int, action: str, entity_type: str, 
+                        entity_id: int, request: Request) -> None:
+       ActivityLog.log_activity(
+           user_id=user_id,
+           action_type=action,
+           entity_type=entity_type,
+           entity_id=entity_id,
+           ip_address=request.remote_addr,
+           user_agent=request.user_agent.string
+       )
+   ```
 
-1. **`auth.py`**
-   - **Why Update?**: Enhanced authentication flow
-   - **Changes Required**:
-     - Update token generation to include verification status
-     - Add verification method validation
-     - Implement rate limiting
-     - Add activity tracking
+### Migration Steps
+
+1. **Database Setup**:
+   ```sql
+   -- Enable partitioning
+   SET GLOBAL innodb_file_per_table=1;
+   SET GLOBAL innodb_file_format=Barracuda;
+   ```
+
+2. **Create Partitioned Tables**:
+   ```sql
+   -- Example for activity_logs
+   CREATE TABLE activity_logs (
+       id INT,
+       created_at DATETIME,
+       -- other fields
+       PRIMARY KEY (id, created_at)
+   ) PARTITION BY RANGE (TO_DAYS(created_at)) (
+       PARTITION p_current VALUES LESS THAN (TO_DAYS(NOW())),
+       PARTITION p_future VALUES LESS THAN MAXVALUE
+   );
+   ```
+
+3. **Data Migration**:
+   ```python
+   # Example of migrating user data
+   def migrate_user_data():
+       for user in legacy_users.find():
+           new_user = User(
+               uuid=str(uuid.uuid4()),
+               email=user['email'],
+               role=UserRole.coerce(user['role']),
+               is_verified=user.get('verified', False)
+           )
+           db.session.add(new_user)
+   ```
+
+### Testing Requirements
+
+1. **Database Tests**:
+   - Verify partitioning functionality
+   - Test foreign key constraints
+   - Validate indexes
+   - Check data integrity
+
+2. **Model Tests**:
+   - Test relationship cascades
+   - Verify computed fields
+   - Test data serialization
+   - Validate business logic
+
+3. **Integration Tests**:
+   - Test authentication flow
+   - Verify activity logging
+   - Test verification process
+   - Validate customer management
+
+### Deployment Considerations
+
+1. **Database Configuration**:
+   - Enable partitioning support
+   - Configure proper character sets
+   - Set appropriate buffer pool size
+   - Enable performance schema
+
+2. **Backup Strategy**:
+   - Implement partition-aware backups
+   - Set up point-in-time recovery
+   - Configure binary logging
+   - Implement backup rotation
+
+3. **Monitoring Setup**:
+   - Monitor partition usage
+   - Track index performance
+   - Monitor foreign key operations
+   - Track verification attempts
+
+### Next Steps
+
+1. **Critical Updates** (Immediate):
+   - Implement partitioned tables
+   - Update indexes
+   - Migrate existing data
+   - Update authentication
+
+2. **High Priority** (Within Week):
+   - Implement activity logging
+   - Update verification system
+   - Enhance customer management
+   - Update search functionality
+
+3. **Medium Priority** (Within Two Weeks):
+   - Implement monitoring
+   - Enhance backup system
+   - Update documentation
+   - Add performance optimizations
+
+4. **Low Priority** (Within Month):
+   - Add advanced features
+   - Enhance reporting
+   - Optimize queries
+   - Add analytics
 
 ## Frontend Updates
 

@@ -1,18 +1,31 @@
-fastapi==0.68.1
-uvicorn==0.15.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.5
-sqlalchemy>=2.0.16
-pydantic>=1.6.2,<2.0.0
-python-dotenv==0.19.0
-requests==2.26.0
-email-validator==1.1.3
-python-facebook-api==0.13.0
-google-auth==2.3.0
-pymysql==1.1.0
-Flask==3.0.2
-Flask-SQLAlchemy==3.1.1
-Flask-CORS==4.0.0
-PyJWT==2.8.0 
-Flask-Migrate==3.1.0
+# Flask Framework and Extensions
+Flask==3.0.2                     # Web framework for building the API
+Flask-SQLAlchemy==3.1.1          # ORM integration for Flask
+Flask-CORS==4.0.0                # Cross-Origin Resource Sharing support
+Flask-Migrate==4.1.0             # Database migration tool
+
+# Database
+SQLAlchemy==2.0.40               # SQL toolkit and ORM
+PyMySQL==1.4.6                   # MySQL database connector for Python
+
+# Authentication and Security
+PyJWT==2.8.0                     # JSON Web Token implementation
+passlib[bcrypt]==1.7.4           # Password hashing library
+bcrypt==4.3.0                    # Modern password hashing for software and servers
+
+# Utility
+python-dotenv==0.19.0            # Loads environment variables from .env files
+requests==2.26.0                 # HTTP library for API requests
+email-validator==1.1.3           # Email syntax and deliverability validation
+
+# OAuth and Social Integration
+requests-oauthlib==1.3.1         # OAuthlib authentication support for Requests
+python-facebook-api==0.13.0      # Facebook API integration
+google-auth==2.3.0               # Google authentication library
+
+# FastAPI Components (Legacy/Optional)
+# fastapi==0.68.1                # FastAPI framework - not currently used
+# uvicorn==0.15.0                # ASGI server - not currently used
+# python-jose[cryptography]==3.3.0 # JavaScript Object Signing and Encryption - not currently used
+# python-multipart==0.0.5        # Multipart form data parsing - not currently used
+# pydantic>=1.6.2,<2.0.0         # Data validation - not currently used

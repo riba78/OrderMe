@@ -1,0 +1,436 @@
+# OrderMe Database Schema and System Architecture Documentation
+
+## 1. Database Schema Overview
+
+The OrderMe system utilizes a MySQL database with a well-structured schema designed to support role-based user management, customer relationship management, activity tracking, and verification systems. The database follows modern best practices for data storage, including proper indexing, foreign key relationships, and optimized column types.
+
+### 1.1 Core Tables and Their Purpose
+
+#### 1.1.1 `users` Table
+
+**Purpose**: Central repository for all user accounts in the system across different roles (admin, regular user, customer).
+
+**Key Columns**:
+- `id`: Primary key identifying each user uniquely (bigint)
+- `uuid`: Universal unique identifier for external references (char(36))
+- `email`: User's email address, must be unique (varchar(120))
+- `password_hash`: Securely hashed password using pbkdf2:sha256 (varchar(255))
+- `role`: User's role in the system - ADMIN, USER, or CUSTOMER (varchar(20))
+- `is_active`: Flag indicating if the account is active (tinyint(1))
+- `is_verified`: Flag indicating if the user's identity is verified (tinyint(1))
+- `primary_verification_method`: Preferred method for verification (varchar(20))
+- `verification_token`: Token used for account verification (varchar(255))
+- `verification_token_expires`: Expiration timestamp for verification token (datetime)
+- `email_change_token`: Token for email address changes (varchar(255))
+- `email_change_new`: New email address during change process (varchar(120))
+- `email_change_expires`: Expiration timestamp for email change token (datetime)
+- `last_login_at`: Timestamp of the most recent login (datetime)
+- `login_count`: Number of successful logins (int)
+- `created_at`: Timestamp when the account was created (datetime)
+- `updated_at`: Timestamp when the account was last updated (datetime)
+- `created_by_id`: ID of the user who created this account (bigint)
+- `created_as_role`: Role of the user who created this account (varchar(20))
+
+**Indexes**:
+- Primary key on `id`
+- Unique index on `email` + `is_active` to ensure no duplicate active users
+- Indexes for `role`, `verification_token`, `uuid`, `created_at`, and `last_login_at` for performance
+
+**Relationships**:
+- Self-referential relationship for tracking who created each user
+- One-to-one relationship with `user_profiles`
+- One-to-many relationship with `activity_logs`
+- One-to-many relationship with `customers` (for assignment tracking)
+
+#### 1.1.2 `user_profiles` Table
+
+**Purpose**: Stores additional, optional information about users.
+
+**Key Columns**:
+- `id`: Primary key (bigint)
+- `user_id`: Foreign key to the users table (bigint)
+- `first_name`: User's first name (varchar(50))
+- `last_name`: User's last name (varchar(50))
+- `business_name`: Business name for organizational users (varchar(100))
+- `street`, `city`, `state`, `zip_code`, `country`: Address components (varchar)
+- `phone_number`: Contact phone number (varchar(20))
+- `tin_trunk_phone`: Special phone number for WhatsApp/AI messaging (varchar(20))
+- `metadata`: Flexible JSON storage for additional user data (longtext)
+- `search_vector`: Generated column for efficient text search (text)
+- `created_at`, `updated_at`: Timestamps for creation and updates (datetime)
+
+**Indexes**:
+- Primary key on `id`
+- Unique index on `user_id`
+- Indexes on `business_name`, `phone_number`, and `search_vector`
+
+**Relationships**:
+- One-to-one relationship with `users` table
+
+#### 1.1.3 `customers` Table
+
+**Purpose**: Specialized table for customer data, linked to the `users` table but with additional customer-specific fields.
+
+**Key Columns**:
+- `id`: Primary key, also links to users table (bigint)
+- `uuid`: Universal unique identifier (char(36))
+- `nickname`: Customer's nickname, required field (varchar(50))
+- `first_name`, `last_name`, `business_name`: Customer identity fields (varchar)
+- `street`, `city`, `state`, `zip_code`, `country`: Address components (varchar)
+- `email`: Customer's email address (varchar(120))
+- `phone_number`: Contact phone (varchar(20))
+- `metadata`: Flexible JSON storage for additional customer data (longtext)
+- `shipping_address`: Generated column combining address components (text)
+- `search_vector`: Generated column for efficient text search (text)
+- `assigned_to_id`: ID of the user responsible for this customer (bigint)
+- `assigned_at`: When the customer was assigned (datetime)
+- `last_assigned_by_id`: User who last changed the assignment (bigint)
+- `last_activity_at`: Timestamp of the customer's last activity (datetime)
+- `created_at`, `updated_at`: Timestamps for creation and updates (datetime)
+
+**Indexes**:
+- Primary key on `id`
+- Unique index on `uuid`
+- Indexes on `assigned_to_id`, `business_name`, `email`, `phone_number`, `last_activity_at`
+- Full-text index on `search_vector`
+
+**Relationships**:
+- Foreign key to `users` table for `id`, `assigned_to_id`, and `last_assigned_by_id`
+- One-to-many relationship with `payment_methods`
+- One-to-one relationship with `payment_info`
+
+#### 1.1.4 `payment_methods` Table
+
+**Purpose**: Stores payment method information for customers.
+
+**Key Columns**:
+- `id`: Primary key (bigint)
+- `customer_id`: Foreign key to customers table (bigint)
+- `type`: Type of payment method (e.g., credit card, bank transfer) (varchar(50))
+- `provider`: Payment service provider (varchar(50))
+- `last_four`: Last four digits of card/account (varchar(4))
+- `expiry_date`: Expiration date for the payment method (datetime)
+- `is_default`: Flag indicating if this is the default payment method (tinyint(1))
+- `created_at`, `updated_at`: Timestamps for creation and updates (datetime)
+
+**Indexes**:
+- Primary key on `id`
+- Index on `customer_id`
+- Composite index on `customer_id` + `is_default`
+
+**Relationships**:
+- Many-to-one relationship with `customers` table
+
+#### 1.1.5 `payment_info` Table
+
+**Purpose**: Stores billing information for customers.
+
+**Key Columns**:
+- `id`: Primary key (bigint)
+- `customer_id`: Foreign key to customers table (bigint)
+- `billing_address`: Full billing address (text)
+- `created_at`, `updated_at`: Timestamps for creation and updates (datetime)
+
+**Indexes**:
+- Primary key on `id`
+- Unique index on `customer_id`
+
+**Relationships**:
+- One-to-one relationship with `customers` table
+
+#### 1.1.6 `user_verification_methods` Table
+
+**Purpose**: Stores information about verification methods for users.
+
+**Key Columns**:
+- `id`: Primary key (bigint)
+- `user_id`: Foreign key to users table (bigint)
+- `method_type`: Type of verification method (email, phone, whatsapp) (varchar(20))
+- `identifier`: Contact identifier for verification (email/phone) (varchar(120))
+- `verification_token`: Token used for verification (varchar(255))
+- `token_expires`: Expiration timestamp for token (datetime)
+- `is_verified`: Flag indicating if the method is verified (tinyint(1))
+- `verified_at`: Timestamp when verification occurred (datetime)
+- `last_verification_attempt`: Timestamp of most recent attempt (datetime)
+- `verification_attempts`: Number of verification attempts (int)
+- `created_at`, `updated_at`: Timestamps for creation and updates (datetime)
+
+**Indexes**:
+- Primary key on `id`
+- Index on `verification_token`
+- Composite indexes on `user_id` + `method_type` and `method_type` + `identifier`
+
+**Relationships**:
+- Many-to-one relationship with `users` table
+
+#### 1.1.7 `activity_logs` Table
+
+**Purpose**: Comprehensive audit trail of all significant actions in the system.
+
+**Key Columns**:
+- `id`: Primary key (bigint)
+- `user_id`: Foreign key to users table, who performed the action (bigint)
+- `action_type`: Type of action performed (varchar(50))
+- `entity_type`: Type of entity affected (varchar(50))
+- `entity_id`: ID of the affected entity (bigint)
+- `metadata`: Additional contextual data in JSON format (longtext)
+- `ip_address`: IP address of the actor (varchar(45))
+- `user_agent`: User-agent string from request (text)
+- `created_at`: Timestamp when the activity occurred (datetime)
+
+**Indexes**:
+- Composite primary key on `id` + `created_at` for partitioning
+- Indexes on `user_id` + `action_type`, `entity_type` + `entity_id`, and `created_at`
+
+**Relationships**:
+- Many-to-one relationship with `users` table
+
+#### 1.1.8 `verification_messages_log` Table
+
+**Purpose**: Tracks all verification messages sent to users.
+
+**Key Columns**:
+- `id`: Primary key (bigint)
+- `user_id`: Foreign key to users table (bigint)
+- `method_type`: Type of verification method (varchar(20))
+- `message_type`: Type of message sent (varchar(50))
+- `identifier`: Recipient identifier (email/phone) (varchar(120))
+- `status`: Status of the message (sent, failed, etc.) (varchar(20))
+- `provider`: Service provider used to send message (varchar(50))
+- `provider_message_id`: ID from the provider system (varchar(255))
+- `error_message`: Error message if sending failed (text)
+- `metadata`: Additional contextual data (longtext)
+- `ip_address`: IP address of the requester (varchar(45))
+- `created_at`: Timestamp when the message was sent (datetime)
+
+**Indexes**:
+- Composite primary key on `id` + `created_at` for partitioning
+- Composite indexes on `user_id` + `method_type`, `status` + `created_at`, and `provider` + `created_at`
+
+**Relationships**:
+- Many-to-one relationship with `users` table
+
+#### 1.1.9 `schema_version` Table
+
+**Purpose**: Tracks database schema versions for migration management.
+
+**Key Columns**:
+- `id`: Primary key (int)
+- `version`: Schema version identifier (varchar(20))
+- `migrated_at`: Timestamp when migration occurred (datetime)
+- `migration_hash`: Hash of the migration for integrity verification (varchar(64))
+
+### 1.2 Database Views
+
+#### 1.2.1 `v_active_users` View
+
+**Purpose**: Provides a simplified view of active users with their profile information.
+
+**Structure**: Joins `users` and `user_profiles` tables, filtering for active users only.
+
+#### 1.2.2 `v_customer_assignments` View
+
+**Purpose**: Shows customer assignment information with related user details.
+
+**Structure**: Joins `customers` table with `users` table for both assigned users and assigning users.
+
+## 2. Role-Based Access Control System
+
+### 2.1 Admin Role (Highest Privileges)
+
+**Key Capabilities**:
+- Create, update, activate, deactivate, or delete users of any role (ADMIN, USER, CUSTOMER)
+- Assign customers to any user and reassign as needed
+- Access all system data and activity logs
+- Perform system configuration and maintenance
+
+**Implementation**:
+- `UserRole.ADMIN` enum value in the `role` column of `users` table
+- `@admin_required` decorator in route handlers to enforce admin access
+
+### 2.2 User Role (Middle Privileges)
+
+**Key Capabilities**:
+- Create, update, activate, deactivate, or delete customers (CUSTOMER role users)
+- Manage customers assigned to them
+- Cannot reassign customers or manage other USER or ADMIN accounts
+- Cannot access system-wide settings
+
+**Implementation**:
+- `UserRole.USER` enum value in the `role` column of `users` table
+- Assignment tracking through the `assigned_to_id` field in the `customers` table
+- Access control logic in route handlers
+
+### 2.3 Customer Role (Lowest Privileges)
+
+**Key Capabilities**:
+- Access only their own data
+- Cannot create or manage other users
+- Limited to customer-specific functionality
+
+**Implementation**:
+- `UserRole.CUSTOMER` enum value in the `role` column of `users` table
+- Customers are created by ADMIN or USER roles and assigned to the creating user by default
+- Customer access is controlled through the `assigned_to_id` field
+
+## 3. User Management and Verification
+
+### 3.1 User Registration
+
+1. Users register with required email and password
+2. Optional fields include first name, last name, business name, and address details
+3. Verification method is selected (email, phone, WhatsApp)
+4. Verification token is sent to the chosen method
+5. Account is created but marked as unverified until token is confirmed
+
+### 3.2 Verification System
+
+**Supported Methods**:
+- Email verification with unique tokens
+- Phone verification with SMS codes
+- WhatsApp verification with message codes
+
+**Implementation**:
+- `user_verification_methods` table stores verification details
+- `verification_messages_log` tracks all verification attempts
+- Configurable expiration periods for verification tokens
+- Rate limiting to prevent abuse
+
+### 3.3 WhatsApp and AI Messaging
+
+- Admin and User roles have `tin_trunk_phone` in their profiles for WhatsApp integration
+- Customer role users do not have this field, as they are managed through different channels
+- The system supports AI-powered messaging for efficient customer communication
+
+## 4. Activity Logging System
+
+### 4.1 Purpose of `activity_logs` Table
+
+The `activity_logs` table serves multiple critical functions:
+
+1. **Security Audit Trail**: Records all important actions including logins, user creation, customer management, and system settings changes
+2. **Compliance Documentation**: Provides evidence of system activity for regulatory requirements
+3. **User Behavior Analysis**: Enables analysis of how users interact with the system
+4. **Troubleshooting**: Assists in diagnosing issues by tracking the sequence of events
+5. **Performance Monitoring**: Helps identify patterns of system usage
+
+### 4.2 Architecture
+
+- Composite primary key on `id` + `created_at` enables efficient partitioning by time
+- Each log entry contains the acting user, affected entity, action type, and timestamp
+- Optional metadata field allows storing context-specific details
+- IP address and user agent tracking for security (configurable)
+- Efficient indexing strategy for high-performance querying
+
+## 5. Schema Version Management
+
+### 5.1 Purpose of `schema_version` Table
+
+The `schema_version` table is essential for database change management:
+
+1. **Version Tracking**: Records the current schema version and migration history
+2. **Change Validation**: Ensures migrations are applied in the correct order
+3. **Integrity Verification**: The migration_hash field verifies that expected changes were applied
+4. **Rollback Support**: Enables reverting to previous versions if needed
+5. **Deployment Management**: Facilitates coordinated deployments across environments
+
+### 5.2 Implementation
+
+- Migration scripts use this table to determine which changes to apply
+- Each migration increments the version number
+- Timestamps provide an audit trail of when changes occurred
+
+## 6. Code Quality and Best Practices Assessment
+
+### 6.1 Models
+
+The SQLAlchemy models in the `backend/models` directory follow best practices:
+
+- Clear class hierarchies with appropriate inheritance
+- Proper type hints and data validation
+- Consistent relationship definitions
+- Comprehensive docstrings explaining purpose and usage
+- Efficient indexing strategies
+- Well-designed generated columns for performance
+
+### 6.2 Routes
+
+The route handlers in `backend/routes` demonstrate solid design principles:
+
+- Organized by functional area (auth, admin, user)
+- Consistent error handling and response formats
+- Proper validation of input data
+- Appropriate use of decorators for access control
+- Thorough activity logging
+- Transaction management with proper rollback handling
+
+### 6.3 Environment Configuration
+
+The `.env` file provides configuration for:
+
+- Database connection parameters
+- Admin user credentials
+- Verification methods and expiration times
+- Rate limiting settings
+- Activity logging configuration
+- OAuth integration settings
+
+### 6.4 Test Coverage
+
+The `test_api.py` file provides comprehensive API testing:
+
+- Authentication and token management
+- User creation and management
+- Verification system
+- Customer management
+- Activity logging
+
+## 7. Recommended Improvements
+
+Based on the analysis of the current implementation, the following improvements are recommended:
+
+### 7.1 Data Model Enhancements
+
+1. **Description Field in Activity Logs**: There is a mismatch between the database schema and the model definition for the `activity_logs` table. The model has a `description` field that doesn't exist in the database. This has been temporarily fixed by using `meta_data` instead, but a proper migration to add the column or update the model should be implemented.
+
+2. **Consistent Naming Convention**: The database uses both `metadata` and `meta_data` in different tables. Standardizing on one naming convention would improve maintenance.
+
+3. **Enhanced Index Strategy**: Consider adding partial indexes for frequently queried subsets of data, particularly for the `activity_logs` table which may grow large.
+
+### 7.2 Code Improvements
+
+1. **Enhanced Error Messages**: Provide more specific error messages for different validation failures to improve user experience.
+
+2. **Pagination Metadata**: Add pagination metadata consistently across all list endpoints for better client-side implementation.
+
+3. **Query Optimization**: Some complex queries, especially those with multiple joins, could benefit from optimization or use of views.
+
+### 7.3 Additional Features
+
+1. **Batch Operations**: Add support for batch operations (create/update/delete) to improve performance for bulk operations.
+
+2. **Enhanced Search**: Implement more advanced search capabilities with fuzzy matching and weighted results.
+
+3. **Caching Strategy**: Implement a caching layer for frequently accessed, rarely changed data to improve performance.
+
+4. **Event-Based Architecture**: Consider implementing an event-based system for better decoupling of components and improved scalability.
+
+### 7.4 Testing Enhancements
+
+1. **Test Data Reset**: Implement proper test data cleanup between test runs.
+
+2. **End-to-End Testing**: Add more comprehensive end-to-end tests covering complex workflows.
+
+3. **Performance Testing**: Add load testing to ensure the system performs well under heavy usage.
+
+### 7.5 DevOps Improvements
+
+1. **Automated Database Migrations**: Implement a CI/CD pipeline for automated database migrations.
+
+2. **Monitoring Setup**: Add comprehensive monitoring and alerting for the database and application.
+
+## 8. Conclusion
+
+The OrderMe database schema and application architecture demonstrate a well-designed system that effectively supports role-based access control, customer relationship management, and comprehensive activity tracking. The code quality is generally good, with attention to security, performance, and maintainability.
+
+The recommended improvements would further enhance the system's robustness, performance, and developer experience. Overall, the current implementation provides a solid foundation for the OrderMe application, with appropriate considerations for scalability and security. 

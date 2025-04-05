@@ -45,9 +45,12 @@ from flask import request, jsonify, g
 import jwt
 from models.user import User
 from models.activity_log import ActivityLog
+from extensions import db
 from config import settings
 import time
 import logging
+import json
+from datetime import datetime
 
 # Rate limiting implementation
 rate_limit_data = {}
@@ -113,16 +116,24 @@ def log_activity(user_id: int, activity_type: str, entity_type: str = None, enti
         return
     
     try:
-        activity = ActivityLog(
-            user_id=user_id,
-            activity_type=activity_type,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            metadata=metadata,
-            ip_address=request.remote_addr if settings.ACTIVITY_LOG_IP_TRACKING else None,
-            user_agent=request.user_agent.string if settings.ACTIVITY_LOG_USER_AGENT_TRACKING else None
-        )
-        db.session.add(activity)
+        from sqlalchemy import text
+        # Create the activity log directly with SQL to bypass model mismatches
+        sql = text("""
+            INSERT INTO activity_logs 
+            (created_at, user_id, action_type, entity_type, entity_id, metadata, ip_address, user_agent) 
+            VALUES (:created_at, :user_id, :action_type, :entity_type, :entity_id, :metadata, :ip_address, :user_agent)
+        """)
+        
+        db.session.execute(sql, {
+            'created_at': datetime.utcnow(),
+            'user_id': user_id,
+            'action_type': activity_type,
+            'entity_type': entity_type or 'None',
+            'entity_id': entity_id or 0,
+            'metadata': json.dumps(metadata) if metadata else None,
+            'ip_address': request.remote_addr if settings.ACTIVITY_LOG_IP_TRACKING else None,
+            'user_agent': request.user_agent.string if settings.ACTIVITY_LOG_USER_AGENT_TRACKING else None
+        })
         db.session.commit()
     except Exception as e:
         logging.error(f"Failed to log activity: {str(e)}")
@@ -162,8 +173,8 @@ def get_current_user():
             return None
             
         # Validate that the user's current role matches the role in the token
-        if user.role.value != token_role:
-            print(f"Role mismatch - Token: {token_role}, User: {user.role.value}")
+        if user.role != token_role:
+            print(f"Role mismatch - Token: {token_role}, User: {user.role}")
             return None
             
         # Log successful authentication

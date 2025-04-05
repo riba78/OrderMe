@@ -48,9 +48,64 @@ from functools import wraps
 from flask import g
 import time
 import uuid
+import jwt
+import traceback
 
 auth_bp = Blueprint('auth', __name__)
 social_auth = SocialAuthHandler()
+
+@auth_bp.route('/debug-login', methods=['POST'])
+def debug_login():
+    """Simple login endpoint for debugging"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"message": "Missing request data"}), 400
+            
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            return jsonify({"message": "Email and password are required"}), 400
+
+        # Find user by email with explicit query
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            return jsonify({"message": "Invalid credentials"}), 401
+
+        # Check password
+        if not check_password_hash(user.password_hash, password):
+            return jsonify({"message": "Invalid credentials"}), 401
+
+        # Generate a simple token
+        payload = {
+            'exp': datetime.utcnow() + timedelta(days=1),
+            'sub': str(user.id),
+            'email': user.email,
+            'role': str(user.role)
+        }
+        
+        token = jwt.encode(
+            payload,
+            settings.SECRET_KEY,
+            algorithm=settings.ALGORITHM
+        )
+        
+        # Return the token without using to_dict
+        return jsonify({
+            'access_token': token,
+            'refresh_token': token,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'role': str(user.role)
+            }
+        })
+        
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"message": "Internal server error", "error": str(e)}), 500
 
 # Rate limiting implementation
 rate_limit_data = {}
@@ -104,7 +159,7 @@ def log_activity(user_id: int, action_type: str, entity_type: str = None,
             action_type=action_type,
             entity_type=entity_type,
             entity_id=entity_id,
-            metadata=metadata,
+            meta_data=metadata,
             ip_address=request.remote_addr if settings.ACTIVITY_LOG_IP_TRACKING else None,
             user_agent=request.user_agent.string if settings.ACTIVITY_LOG_USER_AGENT_TRACKING else None
         )
@@ -140,6 +195,9 @@ def log_verification_message(user_id: int, method_type: str, message_type: str,
 def login():
     try:
         data = request.json
+        if not data:
+            return jsonify({'message': 'Missing request data'}), 400
+            
         email = data.get('email')
         password = data.get('password')
 
@@ -148,14 +206,27 @@ def login():
 
         user = User.query.filter_by(email=email).first()
         
-        if not user or not user.check_password(password):
+        if not user:
+            logging.warning(f"Login attempt for non-existent user: {email}")
+            return jsonify({'message': 'Invalid credentials'}), 401
+            
+        if not hasattr(user, 'check_password'):
+            logging.error(f"User {email} missing check_password method")
+            if hasattr(user, 'verify_password'):
+                password_valid = user.verify_password(password)
+            else:
+                logging.error(f"User {email} has no password verification method")
+                return jsonify({'message': 'Authentication error'}), 500
+        else:
+            password_valid = user.check_password(password)
+            
+        if not password_valid:
             # Log failed login attempt
-            if user:
-                log_activity(
-                    user_id=user.id,
-                    action_type='login_failed',
-                    metadata={'reason': 'invalid_password'}
-                )
+            log_activity(
+                user_id=user.id,
+                action_type='login_failed',
+                metadata={'reason': 'invalid_password'}
+            )
             return jsonify({'message': 'Invalid credentials'}), 401
 
         if not user.is_active:
@@ -182,30 +253,42 @@ def login():
                 }), 202
 
         # Generate JWT token
-        token = social_auth.generate_token(user)
+        try:
+            token = social_auth.generate_token(user)
+        except Exception as token_error:
+            logging.error(f"Token generation error: {str(token_error)}")
+            return jsonify({'message': 'Error generating authentication token'}), 500
         
         # Update login stats
-        user.last_login_at = datetime.utcnow()
-        user.login_count += 1
-        db.session.commit()
+        try:
+            user.last_login_at = datetime.utcnow()
+            user.login_count += 1
+            db.session.commit()
+        except Exception as db_error:
+            logging.error(f"Error updating login stats: {str(db_error)}")
+            db.session.rollback()
         
         # Log successful login
-        log_activity(
-            user_id=user.id,
-            action_type='login',
-            metadata={
-                'method': 'email',
-                'login_count': user.login_count
-            }
-        )
+        try:
+            log_activity(
+                user_id=user.id,
+                action_type='login',
+                metadata={
+                    'method': 'email',
+                    'login_count': user.login_count
+                }
+            )
+        except Exception as log_error:
+            logging.error(f"Error logging login activity: {str(log_error)}")
         
         return jsonify({
-            'token': token,
+            'access_token': token,
+            'refresh_token': token,  # For simplicity, using same token
             'user': user.to_dict()
         })
 
     except Exception as e:
-        logging.error(f"Login error: {str(e)}")
+        logging.error(f"Login error: {str(e)}", exc_info=True)
         return jsonify({'message': 'Internal server error'}), 500
 
 @auth_bp.route('/register', methods=['POST'])
@@ -378,6 +461,77 @@ def resend_verification():
     except Exception as e:
         logging.error(f"Resend verification error: {str(e)}")
         return jsonify({'message': 'Internal server error'}), 500
+
+@auth_bp.route('/refresh', methods=['POST'])
+@rate_limit
+def refresh_token():
+    """Refresh access token using refresh token."""
+    try:
+        data = request.json
+        refresh_token = data.get('refresh_token')
+        
+        if not refresh_token:
+            return jsonify({'message': 'Refresh token is required'}), 400
+            
+        # Decode the refresh token
+        try:
+            payload = jwt.decode(
+                refresh_token, 
+                settings.SECRET_KEY, 
+                algorithms=[settings.ALGORITHM]
+            )
+            user_id = payload.get('sub')
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Refresh token expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'message': 'Invalid refresh token'}), 401
+            
+        # Get the user
+        user = User.query.get(int(user_id))
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+            
+        if not user.is_active:
+            return jsonify({'message': 'User account is inactive'}), 401
+            
+        # Generate new tokens
+        new_token = social_auth.generate_token(user)
+        
+        return jsonify({
+            'access_token': new_token,
+            'refresh_token': refresh_token  # Reuse the same refresh token for simplicity
+        })
+    except Exception as e:
+        logging.error(f"Token refresh error: {str(e)}")
+        return jsonify({'message': 'Internal server error'}), 500
+
+@auth_bp.route('/request-verification', methods=['POST'])
+def request_verification():
+    """Request a verification code for a user"""
+    try:
+        data = request.json
+        if not data or not data.get('email') or not data.get('method'):
+            return jsonify({"message": "Email and method are required"}), 400
+        
+        # Find user by email
+        user = User.query.filter_by(email=data['email']).first()
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+        
+        # Send verification code
+        method = data['method']
+        verification_sent = send_verification_code(user, method, 'verification')
+        
+        if not verification_sent:
+            return jsonify({"message": "Failed to send verification"}), 500
+        
+        return jsonify({
+            "message": "Verification code sent successfully",
+            "method": method
+        }), 200
+    except Exception as e:
+        logging.error(f"Verification request error: {str(e)}")
+        return jsonify({"message": "Internal server error"}), 500
 
 def send_verification_code(user: User, method_type: str, purpose: str) -> bool:
     """Send verification code using specified method"""

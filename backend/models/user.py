@@ -27,11 +27,31 @@ class UserRole(str, Enum):
     USER = 'USER'
     CUSTOMER = 'CUSTOMER'
 
+    @staticmethod
+    def coerce(role):
+        """Convert a string to a UserRole enum value."""
+        if isinstance(role, UserRole):
+            return role
+        for r in UserRole:
+            if r.value == role:
+                return r
+        raise ValueError(f"Invalid role: {role}")
+
 class VerificationMethod(str, Enum):
     """Enum for user verification methods."""
     EMAIL = 'email'
     PHONE = 'phone'
     WHATSAPP = 'whatsapp'
+
+    @staticmethod
+    def coerce(method):
+        """Convert a string to a VerificationMethod enum value."""
+        if isinstance(method, VerificationMethod):
+            return method
+        for m in VerificationMethod:
+            if m.value == method:
+                return m
+        raise ValueError(f"Invalid verification method: {method}")
 
 class User(Base):
     """
@@ -103,32 +123,41 @@ class User(Base):
 
     def set_password(self, password: str):
         """Set password hash for the user."""
-        self.password_hash = generate_password_hash(password)
+        # Use default algorithm (pbkdf2:sha256) instead of scrypt which might not be available
+        self.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
 
-    def verify_password(self, password: str) -> bool:
-        """Verify password against stored hash."""
+    def check_password(self, password: str) -> bool:
+        """Check password against stored hash."""
         return check_password_hash(self.password_hash, password)
 
     def to_dict(self, include_profile=False):
         """Convert user model to dictionary with proper string serialization."""
-        data = {
-            'id': self.id,
-            'uuid': self.uuid,
-            'email': self.email,
-            'role': str(self.role),
-            'is_active': self.is_active,
-            'is_verified': self.is_verified,
-            'primary_verification_method': self.primary_verification_method,
-            'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
-            'login_count': self.login_count,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'created_by_id': self.created_by_id,
-            'created_as_role': str(self.created_as_role)
-        }
-        if include_profile and self.profile:
-            data['profile'] = self.profile.to_dict()
-        return data
+        try:
+            data = {
+                'id': self.id,
+                'uuid': self.uuid,
+                'email': self.email,
+                'role': str(self.role),
+                'is_active': self.is_active,
+                'is_verified': self.is_verified,
+                'primary_verification_method': str(self.primary_verification_method) if self.primary_verification_method else None,
+                'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
+                'login_count': self.login_count,
+                'created_at': self.created_at.isoformat() if self.created_at else None,
+                'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            }
+            if include_profile and self.profile:
+                data['profile'] = self.profile.to_dict()
+            return data
+        except Exception as e:
+            import logging
+            logging.error(f"Error in User.to_dict(): {str(e)}")
+            # Return minimal safe data
+            return {
+                'id': self.id,
+                'email': self.email,
+                'role': str(self.role) if self.role else 'unknown'
+            }
 
     def update_last_login(self):
         """Update the last login timestamp and increment login count."""
@@ -166,6 +195,10 @@ class AdminUser(User):
     __mapper_args__ = {
         'polymorphic_identity': UserRole.ADMIN.value
     }
+
+    def check_password(self, password: str) -> bool:
+        """Verify password against stored hash."""
+        return check_password_hash(self.password_hash, password)
 
 class RegularUser(User):
     """Regular user type with standard access."""

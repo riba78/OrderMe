@@ -75,10 +75,10 @@ class Settings:
         self.RATE_LIMIT_BLOCK_DURATION = int(os.getenv('RATE_LIMIT_BLOCK_DURATION', '900'))
 
         # Activity logging settings
-        self.ACTIVITY_LOG_ENABLED = os.getenv('ACTIVITY_LOG_ENABLED', 'true').lower() == 'true'
+        self.ACTIVITY_LOG_ENABLED = False
         self.ACTIVITY_LOG_RETENTION_DAYS = int(os.getenv('ACTIVITY_LOG_RETENTION_DAYS', '90'))
-        self.ACTIVITY_LOG_IP_TRACKING = os.getenv('ACTIVITY_LOG_IP_TRACKING', 'true').lower() == 'true'
-        self.ACTIVITY_LOG_USER_AGENT_TRACKING = os.getenv('ACTIVITY_LOG_USER_AGENT_TRACKING', 'true').lower() == 'true'
+        self.ACTIVITY_LOG_IP_TRACKING = True
+        self.ACTIVITY_LOG_USER_AGENT_TRACKING = True
 
         # Environment
         self.ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')

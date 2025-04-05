@@ -28,7 +28,7 @@ def check_admin():
             FROM users u
             LEFT JOIN user_profiles up ON u.id = up.user_id
             LEFT JOIN user_verification_methods uvm ON u.id = uvm.user_id
-            WHERE u.role = 'ADMIN'
+            WHERE u.role = UserRole.ADMIN.value
         """)).fetchall()
         
         if result:

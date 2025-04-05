@@ -134,20 +134,31 @@ class SocialAuthHandler:
 
     def generate_token(self, user: User) -> str:
         """Generate JWT token for authenticated user"""
-        expires_delta = timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
-        expire = datetime.utcnow() + expires_delta
-        
-        payload = {
-            'exp': expire,
-            'sub': str(user.id),
-            'email': user.email,
-            'role': user.role.value
-        }
-        return jwt.encode(
-            payload, 
-            settings.SECRET_KEY, 
-            algorithm=settings.ALGORITHM
-        )
+        try:
+            expires_delta = timedelta(days=settings.ACCESS_TOKEN_EXPIRE_DAYS)
+            expire = datetime.utcnow() + expires_delta
+            
+            payload = {
+                'exp': expire,
+                'sub': str(user.id),
+                'email': user.email,
+                'role': str(user.role)
+            }
+            
+            logging.debug(f"Generating token with payload: {payload}")
+            
+            token = jwt.encode(
+                payload, 
+                settings.SECRET_KEY, 
+                algorithm=settings.ALGORITHM
+            )
+            
+            logging.debug(f"Token generated successfully: {token[:10]}...")
+            
+            return token
+        except Exception as e:
+            logging.error(f"Error generating token: {str(e)}", exc_info=True)
+            raise
 
     def create_or_get_user(self, user_data: dict) -> User:
         """Create or get user with social authentication"""
@@ -161,7 +172,7 @@ class SocialAuthHandler:
                     role=UserRole.USER,
                     is_verified=True,
                     is_active=True,
-                    primary_verification_method=VerificationMethod.GOOGLE if user_data['provider'] == 'google' else VerificationMethod.FACEBOOK
+                    primary_verification_method='email' if user_data['provider'] == 'google' else 'email'
                 )
                 db.session.add(user)
                 db.session.commit()
@@ -169,7 +180,7 @@ class SocialAuthHandler:
                 # Create verification method record
                 verification = UserVerificationMethod(
                     user_id=user.id,
-                    method_type=VerificationMethod.GOOGLE if user_data['provider'] == 'google' else VerificationMethod.FACEBOOK,
+                    method_type='email' if user_data['provider'] == 'google' else 'email',
                     identifier=user_data['email'],
                     is_verified=True
                 )

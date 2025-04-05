@@ -54,6 +54,9 @@ from models.user import User, UserRole
 from routes.auth import auth_bp
 from routes.admin import admin_bp
 from routes.user import user_bp
+import logging
+from werkzeug.exceptions import HTTPException
+from config import settings
 
 load_dotenv()
 
@@ -90,18 +93,31 @@ def create_admin_user():
 def create_app():
     app = Flask(__name__)
     
-    # CORS configuration - Updated to handle all responses
-    CORS(app, 
-         resources={
-             r"/*": {  # Match all routes
-                 "origins": ["http://localhost:8080"],
-                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                 "allow_headers": ["Content-Type", "Authorization", "Accept"],
-                 "expose_headers": ["Content-Type", "Authorization"],
-                 "supports_credentials": True,
-                 "max_age": 3600
-             }
-         })
+    # Configure app
+    app.config['SQLALCHEMY_DATABASE_URI'] = settings.DATABASE_URL
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['DEBUG'] = not settings.is_production
+    app.config['SECRET_KEY'] = settings.SECRET_KEY
+    
+    # For development, enable more detailed errors
+    if not settings.is_production:
+        app.config['PROPAGATE_EXCEPTIONS'] = True
+        app.config['TRAP_HTTP_EXCEPTIONS'] = True
+    
+    # Enable activity logging
+    settings.ACTIVITY_LOG_ENABLED = True
+    
+    # Initialize extensions
+    init_extensions(app)
+    
+    # Setup logging
+    if not settings.is_production:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    
+    # Enable CORS
+    CORS(app)
 
     @app.after_request
     def after_request(response):
@@ -120,15 +136,13 @@ def create_app():
 
     # Global error handler to ensure CORS headers are set
     @app.errorhandler(Exception)
-    def handle_error(error):
-        code = getattr(error, 'code', 500)
-        response = jsonify({
-            'error': str(error.__class__.__name__),
-            'message': str(error),
-            'status_code': code
-        })
-        response.status_code = code
-        return response
+    def handle_exception(e):
+        app.logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+        
+        if isinstance(e, HTTPException):
+            return jsonify({"message": e.description}), e.code
+        
+        return jsonify({"message": "Internal server error", "error": str(e)}), 500
 
     # Remove individual preflight routes as they're now handled globally
     @app.route('/<path:path>', methods=['OPTIONS'])
@@ -198,18 +212,20 @@ def create_app():
         response.status_code = 500
         return response
 
-    # Configure SQLAlchemy
-    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
-
-    # Initialize extensions
-    init_extensions(app)
-
     # Register blueprints with /api prefix as per working state
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
     app.register_blueprint(user_bp, url_prefix='/api/user')
+    
+    # Health check endpoint
+    @app.route('/api/health', methods=['GET'])
+    def health_check():
+        return jsonify({"status": "ok", "message": "API is running"}), 200
+
+    # Request logger
+    @app.before_request
+    def log_request_info():
+        app.logger.debug('Request: %s %s', request.method, request.path)
 
     with app.app_context():
         # Create database tables

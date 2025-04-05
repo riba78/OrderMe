@@ -5,17 +5,24 @@ This module manages social authentication integrations for the application:
 1. Google OAuth2 authentication
 2. Facebook authentication
 3. JWT token generation and management
+4. Verification methods
+5. Activity logging
 
 Features:
 - Validates Google and Facebook OAuth tokens
 - Handles user creation/retrieval for social logins
 - Generates JWT tokens for authenticated sessions
 - Manages token expiration and refresh
+- Supports multiple verification methods
+- Tracks authentication activities
+- Implements rate limiting
 
 Configuration:
 - Requires Google OAuth2 credentials
 - Requires Facebook App credentials
 - Uses JWT secret key for token signing
+- Configurable verification methods
+- Activity logging settings
 
 The module provides a unified interface for handling different social authentication
 providers while maintaining consistent user session management.
@@ -27,10 +34,14 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 import jwt
 from datetime import datetime, timedelta
+import logging
 
-from models.user import User
+from models.user import User, UserRole, VerificationMethod
+from models.user_verification_method import UserVerificationMethod
+from models.activity_log import ActivityLog
 from extensions import db
 from config import settings
+from .utils import log_activity
 
 class SocialAuthHandler:
     def __init__(self):
@@ -51,13 +62,26 @@ class SocialAuthHandler:
             if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
                 return None
 
+            # Log verification attempt
+            log_activity(
+                user_id=None,
+                activity_type='google_token_verification',
+                metadata={'status': 'success', 'email': idinfo['email']}
+            )
+
             return {
                 'email': idinfo['email'],
                 'name': idinfo.get('name', ''),
                 'picture': idinfo.get('picture', '')
             }
         except Exception as e:
-            print(f"Google token verification error: {str(e)}")
+            logging.error(f"Google token verification error: {str(e)}")
+            # Log failed verification
+            log_activity(
+                user_id=None,
+                activity_type='google_token_verification',
+                metadata={'status': 'failed', 'error': str(e)}
+            )
             return None
 
     def verify_facebook_token(self, access_token: str, user_id: str) -> bool:
@@ -72,15 +96,40 @@ class SocialAuthHandler:
             data = response.json()
 
             if not data.get('data', {}).get('is_valid'):
+                # Log failed verification
+                log_activity(
+                    user_id=None,
+                    activity_type='facebook_token_verification',
+                    metadata={'status': 'failed', 'reason': 'invalid_token'}
+                )
                 return False
 
             # Verify the user ID matches
             if str(data['data']['user_id']) != str(user_id):
+                # Log failed verification
+                log_activity(
+                    user_id=None,
+                    activity_type='facebook_token_verification',
+                    metadata={'status': 'failed', 'reason': 'user_id_mismatch'}
+                )
                 return False
+
+            # Log successful verification
+            log_activity(
+                user_id=None,
+                activity_type='facebook_token_verification',
+                metadata={'status': 'success', 'user_id': user_id}
+            )
 
             return True
         except Exception as e:
-            print(f"Facebook token verification error: {str(e)}")
+            logging.error(f"Facebook token verification error: {str(e)}")
+            # Log failed verification
+            log_activity(
+                user_id=None,
+                activity_type='facebook_token_verification',
+                metadata={'status': 'failed', 'error': str(e)}
+            )
             return False
 
     def generate_token(self, user: User) -> str:
@@ -100,13 +149,44 @@ class SocialAuthHandler:
             algorithm=settings.ALGORITHM
         )
 
-    @staticmethod
-    def create_or_get_user(user_data: dict) -> User:
-        user = User.get_by_email(user_data['email'])
-        if not user:
-            user = User.create(
-                email=user_data['email'],
-                name=user_data.get('name', ''),
-                provider=user_data['provider']
-            )
-        return user 
+    def create_or_get_user(self, user_data: dict) -> User:
+        """Create or get user with social authentication"""
+        try:
+            user = User.query.filter_by(email=user_data['email']).first()
+            if not user:
+                # Create new user
+                user = User(
+                    email=user_data['email'],
+                    name=user_data.get('name', ''),
+                    role=UserRole.USER,
+                    is_verified=True,
+                    is_active=True,
+                    primary_verification_method=VerificationMethod.GOOGLE if user_data['provider'] == 'google' else VerificationMethod.FACEBOOK
+                )
+                db.session.add(user)
+                db.session.commit()
+
+                # Create verification method record
+                verification = UserVerificationMethod(
+                    user_id=user.id,
+                    method_type=VerificationMethod.GOOGLE if user_data['provider'] == 'google' else VerificationMethod.FACEBOOK,
+                    identifier=user_data['email'],
+                    is_verified=True
+                )
+                db.session.add(verification)
+                db.session.commit()
+
+                # Log user creation
+                log_activity(
+                    user_id=user.id,
+                    activity_type='social_user_creation',
+                    metadata={
+                        'provider': user_data['provider'],
+                        'email': user_data['email']
+                    }
+                )
+
+            return user
+        except Exception as e:
+            logging.error(f"Error creating/getting user: {str(e)}")
+            raise 

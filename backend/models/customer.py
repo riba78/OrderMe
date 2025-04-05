@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Integer, String, Text, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
-from .user import User
+from .user import User, UserRole
 
 class PaymentMethod(Base):
     __tablename__ = 'payment_methods'
@@ -16,6 +16,7 @@ class PaymentMethod(Base):
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class PaymentInfo(Base):
     __tablename__ = 'payment_info'
@@ -24,25 +25,81 @@ class PaymentInfo(Base):
     customer_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'))
     billing_address: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Customer(User):
+    """
+    Customer model extending the base User model.
+    Includes customer-specific fields and assignment relationship.
+    """
     __tablename__ = 'customers'
     __mapper_args__ = {'polymorphic_identity': 'customer'}
 
     id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), primary_key=True)
+    first_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     shipping_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    search_vector: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    total_orders: Mapped[int] = mapped_column(Integer, default=0)
+    total_spent: Mapped[float] = mapped_column(Float, default=0.0)
+    loyalty_points: Mapped[int] = mapped_column(Integer, default=0)
+    last_order_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Assignment relationship
+    assigned_to_id: Mapped[Optional[int]] = mapped_column(
+        Integer, 
+        ForeignKey('users.id', name='fk_customer_assigned_to'),
+        nullable=True
+    )
+    last_assigned_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey('users.id', name='fk_customer_last_assigned_by'),
+        nullable=True
+    )
+    last_assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    assigned_to = relationship(
+        'User',
+        foreign_keys=[assigned_to_id],
+        back_populates='assigned_customers'
+    )
+    last_assigned_by = relationship(
+        'User',
+        foreign_keys=[last_assigned_by_id]
+    )
+
     # Relationships
     payment_methods: Mapped[List["PaymentMethod"]] = relationship(lazy="select", backref="customer")
     payment_info: Mapped[Optional["PaymentInfo"]] = relationship(uselist=False, backref="customer")
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.role = UserRole.CUSTOMER
+
     def to_dict(self):
         """Convert customer model to dictionary with all fields."""
         base_dict = super().to_dict()
         base_dict.update({
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'phone': self.phone,
             'shipping_address': self.shipping_address,
-            'phone_number': self.phone_number
+            'total_orders': self.total_orders,
+            'total_spent': self.total_spent,
+            'loyalty_points': self.loyalty_points,
+            'last_order_at': self.last_order_at.isoformat() if self.last_order_at else None,
+            'assigned_to': {
+                'id': self.assigned_to.id,
+                'email': self.assigned_to.email
+            } if self.assigned_to else None,
+            'last_assigned_by': {
+                'id': self.last_assigned_by.id,
+                'email': self.last_assigned_by.email
+            } if self.last_assigned_by else None,
+            'last_assigned_at': self.last_assigned_at.isoformat() if self.last_assigned_at else None
         })
         return base_dict
     
@@ -73,134 +130,40 @@ class Customer(User):
         
     def update_phone_number(self, phone: str) -> None:
         """Update the phone number."""
-        self.phone_number = phone
+        self.phone = phone
 
     def update_billing_address(self, address: str) -> None:
         """Update the customer's billing address."""
-        self.payment_info.billing_address = address
+        if not self.payment_info:
+            self.payment_info = PaymentInfo(billing_address=address)
+        else:
+            self.payment_info.billing_address = address
 
     def add_loyalty_points(self, points: int) -> None:
         """Add loyalty points to the customer's account."""
-        # Loyalty points logic would be implemented here
-        pass
+        self.loyalty_points += points
 
     def use_loyalty_points(self, points: int) -> bool:
         """Use loyalty points for a purchase."""
-        # Loyalty points logic would be implemented here
-        return False
-
-    def update_order_stats(self, order_amount: float) -> None:
-        """Update customer's order statistics."""
-        # Order statistics logic would be implemented here
-        pass
-
-    def get_default_payment(self) -> Optional[PaymentInfo]:
-        """Get the default payment method."""
-        # Default payment logic would be implemented here
-        return None
-
-    def remove_payment_method(self, payment_id: int) -> bool:
-        """Remove a payment method."""
-        payment_method = self.get_payment_method(payment_id)
-        if payment_method:
-            self.payment_methods.remove(payment_method)
+        if self.loyalty_points >= points:
+            self.loyalty_points -= points
             return True
         return False
 
-    def update_order_stats(self, order_amount: float) -> None:
-        """Update customer's order statistics."""
-        # Order statistics logic would be implemented here
-        pass
-
-    def get_payment_method(self, payment_id: int) -> Optional[PaymentMethod]:
-        """Get a specific payment method by ID."""
-        return self.get_payment_method(payment_id)
-
-    def update_order_stats(self, order_amount: float) -> None:
-        """Update customer's order statistics."""
-        # Order statistics logic would be implemented here
-        pass
-
-    def get_default_payment(self) -> Optional[PaymentInfo]:
-        """Get the default payment method."""
-        # Default payment logic would be implemented here
-        return None
-
-    def remove_payment_method(self, payment_id: int) -> bool:
-        """Remove a payment method."""
-        payment_method = self.get_payment_method(payment_id)
-        if payment_method:
-            self.payment_methods.remove(payment_method)
-            return True
-        return False
-
-    def update_order_stats(self, order_amount: float) -> None:
-        """Update customer's order statistics."""
-        # Order statistics logic would be implemented here
-        pass
-
-    def get_payment_method(self, payment_id: int) -> Optional[PaymentMethod]:
-        """Get a specific payment method by ID."""
-        return self.get_payment_method(payment_id)
-
-    def update_order_stats(self, order_amount: float) -> None:
-        """Update customer's order statistics."""
-        # Order statistics logic would be implemented here
-        pass
-
-    def get_default_payment(self) -> Optional[PaymentInfo]:
-        """Get the default payment method."""
-        # Default payment logic would be implemented here
-        return None
-
-    def add_payment_method(self, payment_info: PaymentInfo) -> bool:
-        """Add a new payment method."""
-        if payment_info.payment_id in self.payment_methods:
-            return False
-        
-        self.payment_methods[payment_info.payment_id] = payment_info
-        if payment_info.is_default or not self.default_payment_id:
-            self.set_default_payment(payment_info.payment_id)
-        return True
-    
-    def remove_payment_method(self, payment_id: str) -> bool:
-        """Remove a payment method."""
-        if payment_id not in self.payment_methods:
-            return False
-        
-        if payment_id == self.default_payment_id:
-            self.default_payment_id = None
-            # Set another payment method as default if available
-            if self.payment_methods:
-                next_payment = next(iter(self.payment_methods.values()))
-                self.set_default_payment(next_payment.payment_id)
-                
-        del self.payment_methods[payment_id]
-        return True
-    
-    def set_default_payment(self, payment_id: str) -> bool:
-        """Set a payment method as default."""
-        if payment_id not in self.payment_methods:
-            return False
-            
-        # Remove default flag from current default
-        if self.default_payment_id:
-            self.payment_methods[self.default_payment_id].is_default = False
-            
-        self.default_payment_id = payment_id
-        self.payment_methods[payment_id].is_default = True
-        return True
-    
-    def get_default_payment(self) -> Optional[PaymentInfo]:
-        """Get the default payment method."""
-        return self.payment_methods.get(self.default_payment_id) if self.default_payment_id else None
-    
     def update_order_stats(self, order_amount: float) -> None:
         """Update customer's order statistics."""
         self.total_orders += 1
         self.total_spent += order_amount
-        self.last_order_date = datetime.now()
-    
-    def get_payment_method(self, payment_id: str) -> Optional[PaymentInfo]:
-        """Get a specific payment method."""
-        return self.payment_methods.get(payment_id) 
+        self.last_order_at = datetime.utcnow()
+
+    def assign_to_user(self, user_id: int, assigned_by_id: int) -> None:
+        """Assign the customer to a user."""
+        self.assigned_to_id = user_id
+        self.last_assigned_by_id = assigned_by_id
+        self.last_assigned_at = datetime.utcnow()
+
+    def remove_assignment(self) -> None:
+        """Remove the customer's assignment."""
+        self.assigned_to_id = None
+        self.last_assigned_by_id = None
+        self.last_assigned_at = None 

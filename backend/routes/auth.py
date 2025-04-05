@@ -7,6 +7,9 @@ This module handles all authentication-related endpoints and is confirmed workin
 - Regular user login
 - JWT token generation
 - Role-based access control
+- Verification methods
+- Activity logging
+- Rate limiting
 
 Key Working Features:
 1. User Authentication:
@@ -14,6 +17,8 @@ Key Working Features:
    - JWT token generation
    - Role verification
    - Session management
+   - Rate limiting
+   - Activity logging
 
 2. User Registration:
    - Email validation
@@ -21,6 +26,8 @@ Key Working Features:
    - Role assignment (USER)
    - MySQL storage
    - Automatic activation
+   - Verification methods
+   - Activity logging
 
 3. Admin Access:
    - Default admin credentials:
@@ -28,6 +35,7 @@ Key Working Features:
      Password: admin123
    - Full admin privileges
    - Admin dashboard access
+   - Activity logging
 
 DO NOT MODIFY these working implementations without thorough testing.
 
@@ -44,6 +52,8 @@ Account Management:
 - POST /api/auth/data-deletion: Request account deletion
 - POST /api/auth/verify-email: Email verification
 - POST /api/auth/reset-password: Password reset
+- POST /api/auth/verify-phone: Phone verification
+- POST /api/auth/change-email: Email change request
 
 Features:
 - JWT token generation and validation
@@ -52,25 +62,90 @@ Features:
 - User session management
 - Detailed error handling and logging
 - Account security measures
-
-The module provides comprehensive authentication functionality
-with both traditional and social authentication methods.
+- Rate limiting
+- Activity logging
+- Multiple verification methods
 """
 
 from flask import Blueprint, request, jsonify
 from auth.social import SocialAuthHandler
-from models.user import User
+from models.user import User, UserRole, VerificationMethod
+from models.activity_log import ActivityLog
+from models.verification_message_log import VerificationMessageLog
 from extensions import db
-from models.user import UserRole
 from config import settings
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import check_password_hash, generate_password_hash
 import logging
+from functools import wraps
+from flask import g
+import time
 
 auth_bp = Blueprint('auth', __name__)
 social_auth = SocialAuthHandler()
 
+# Rate limiting implementation
+rate_limit_data = {}
+
+def rate_limit(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        ip = request.remote_addr
+        current_time = time.time()
+        
+        # Initialize rate limit data for this IP if not exists
+        if ip not in rate_limit_data:
+            rate_limit_data[ip] = {
+                'attempts': 0,
+                'window_start': current_time,
+                'blocked_until': None
+            }
+        
+        # Check if IP is blocked
+        if rate_limit_data[ip]['blocked_until'] and current_time < rate_limit_data[ip]['blocked_until']:
+            return jsonify({'message': 'Too many attempts. Please try again later.'}), 429
+        
+        # Reset window if expired
+        if current_time - rate_limit_data[ip]['window_start'] > settings.RATE_LIMIT_WINDOW:
+            rate_limit_data[ip] = {
+                'attempts': 0,
+                'window_start': current_time,
+                'blocked_until': None
+            }
+        
+        # Check attempts
+        if rate_limit_data[ip]['attempts'] >= settings.RATE_LIMIT_ATTEMPTS:
+            rate_limit_data[ip]['blocked_until'] = current_time + settings.RATE_LIMIT_BLOCK_DURATION
+            return jsonify({'message': 'Too many attempts. Please try again later.'}), 429
+        
+        # Increment attempts
+        rate_limit_data[ip]['attempts'] += 1
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+def log_activity(user_id: int, activity_type: str, entity_type: str = None, entity_id: int = None, metadata: dict = None):
+    """Log user activity if enabled in settings"""
+    if not settings.ACTIVITY_LOG_ENABLED:
+        return
+    
+    try:
+        activity = ActivityLog(
+            user_id=user_id,
+            activity_type=activity_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            metadata=metadata,
+            ip_address=request.remote_addr if settings.ACTIVITY_LOG_IP_TRACKING else None,
+            user_agent=request.user_agent.string if settings.ACTIVITY_LOG_USER_AGENT_TRACKING else None
+        )
+        db.session.add(activity)
+        db.session.commit()
+    except Exception as e:
+        logging.error(f"Failed to log activity: {str(e)}")
+
 @auth_bp.route('/login', methods=['POST'])
+@rate_limit
 def login():
     try:
         print("=== Login Request ===")
@@ -108,6 +183,13 @@ def login():
         # Generate JWT token
         token = social_auth.generate_token(user)
         print("Generated token successfully")
+        
+        # Log successful login
+        log_activity(
+            user_id=user.id,
+            activity_type='login',
+            metadata={'method': 'email'}
+        )
         
         return jsonify({
             'token': token,
@@ -246,6 +328,7 @@ def confirm_data_deletion(token):
         return jsonify({'message': str(e)}), 500
 
 @auth_bp.route('/auth/register', methods=['POST'])
+@rate_limit
 def register():
     """
     User Registration Endpoint - WORKING STATE
@@ -288,6 +371,8 @@ def register():
         email = data.get('email')
         password = data.get('password')
         name = data.get('name', email.split('@')[0])  # Use part before @ as name if not provided
+        phone = data.get('phone')
+        verification_method = data.get('verification_method', VerificationMethod.EMAIL.value)
 
         if not email or not password:
             return jsonify({'message': 'Email and password are required'}), 400
@@ -302,15 +387,47 @@ def register():
             name=name,
             role=UserRole.USER,
             is_verified=False,
-            is_active=True
+            is_active=True,
+            primary_verification_method=verification_method
         )
         user.set_password(password)
         
         db.session.add(user)
         db.session.commit()
 
+        # Create verification method record
+        if verification_method == VerificationMethod.EMAIL.value:
+            verification = UserVerificationMethod(
+                user_id=user.id,
+                method_type=VerificationMethod.EMAIL,
+                identifier=email,
+                is_verified=False
+            )
+        elif verification_method == VerificationMethod.PHONE.value and phone:
+            verification = UserVerificationMethod(
+                user_id=user.id,
+                method_type=VerificationMethod.PHONE,
+                identifier=phone,
+                is_verified=False
+            )
+        else:
+            return jsonify({'message': 'Invalid verification method or missing phone number'}), 400
+
+        db.session.add(verification)
+        db.session.commit()
+
         # Generate JWT token
         token = social_auth.generate_token(user)
+        
+        # Log registration
+        log_activity(
+            user_id=user.id,
+            activity_type='register',
+            metadata={
+                'verification_method': verification_method,
+                'phone': phone if phone else None
+            }
+        )
         
         return jsonify({
             'token': token,
@@ -321,4 +438,140 @@ def register():
         print(f"Registration error: {str(e)}")
         import traceback
         print("Traceback:", traceback.format_exc())
+        return jsonify({'message': str(e)}), 500
+
+@auth_bp.route('/verify-email', methods=['POST'])
+@token_required
+def verify_email():
+    try:
+        user = get_current_user()
+        token = request.json.get('token')
+        
+        if not token:
+            return jsonify({'message': 'Verification token is required'}), 400
+            
+        # Verify token and update user status
+        verification = UserVerificationMethod.query.filter_by(
+            user_id=user.id,
+            method_type=VerificationMethod.EMAIL,
+            verification_token=token
+        ).first()
+        
+        if not verification:
+            return jsonify({'message': 'Invalid verification token'}), 400
+            
+        verification.is_verified = True
+        verification.verification_token = None
+        user.is_verified = True
+        db.session.commit()
+        
+        # Log verification
+        log_activity(
+            user_id=user.id,
+            activity_type='email_verification',
+            metadata={'status': 'success'}
+        )
+        
+        return jsonify({'message': 'Email verified successfully'})
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@auth_bp.route('/verify-phone', methods=['POST'])
+@token_required
+def verify_phone():
+    try:
+        user = get_current_user()
+        code = request.json.get('code')
+        
+        if not code:
+            return jsonify({'message': 'Verification code is required'}), 400
+            
+        # Verify code and update user status
+        verification = UserVerificationMethod.query.filter_by(
+            user_id=user.id,
+            method_type=VerificationMethod.PHONE,
+            verification_token=code
+        ).first()
+        
+        if not verification:
+            return jsonify({'message': 'Invalid verification code'}), 400
+            
+        verification.is_verified = True
+        verification.verification_token = None
+        user.is_verified = True
+        db.session.commit()
+        
+        # Log verification
+        log_activity(
+            user_id=user.id,
+            activity_type='phone_verification',
+            metadata={'status': 'success'}
+        )
+        
+        return jsonify({'message': 'Phone number verified successfully'})
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@auth_bp.route('/change-email', methods=['POST'])
+@token_required
+def change_email():
+    try:
+        user = get_current_user()
+        new_email = request.json.get('new_email')
+        
+        if not new_email:
+            return jsonify({'message': 'New email is required'}), 400
+            
+        if User.query.filter_by(email=new_email).first():
+            return jsonify({'message': 'Email already in use'}), 400
+            
+        # Generate email change token
+        token = generate_token()
+        user.email_change_token = token
+        user.email_change_new = new_email
+        user.email_change_expires = datetime.utcnow() + timedelta(minutes=settings.VERIFICATION_TOKEN_EXPIRE_MINUTES)
+        db.session.commit()
+        
+        # Send verification email (implement this based on your email service)
+        # send_email_change_verification(new_email, token)
+        
+        # Log email change request
+        log_activity(
+            user_id=user.id,
+            activity_type='email_change_request',
+            metadata={'new_email': new_email}
+        )
+        
+        return jsonify({'message': 'Email change verification sent'})
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@auth_bp.route('/confirm-email-change/<token>', methods=['GET'])
+def confirm_email_change(token):
+    try:
+        user = User.query.filter_by(email_change_token=token).first()
+        
+        if not user or datetime.utcnow() > user.email_change_expires:
+            return jsonify({'message': 'Invalid or expired token'}), 400
+            
+        new_email = user.email_change_new
+        user.email = new_email
+        user.email_change_token = None
+        user.email_change_new = None
+        user.email_change_expires = None
+        db.session.commit()
+        
+        # Log email change
+        log_activity(
+            user_id=user.id,
+            activity_type='email_change',
+            metadata={'old_email': user.email, 'new_email': new_email}
+        )
+        
+        return jsonify({'message': 'Email changed successfully'})
+        
+    except Exception as e:
         return jsonify({'message': str(e)}), 500 

@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+refere to the structure in [backend structure.md](mdc:backend structure.md) when creating new .py files, also review and update if needed the [backend structure.md](mdc:backend structure.md) every time new files created.
+ 

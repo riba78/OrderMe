@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+refere to the [Database Connection Guide.md](mdc:Database Connection Guide.md) every time you create a file with data base connection.

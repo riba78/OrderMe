@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+create the models/ .py files according to the [Database Specification Document.md](mdc:Database Specification Document.md). review the [Database Specification Document.md](mdc:Database Specification Document.md) every time you create a new model file.

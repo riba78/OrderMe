@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+refere to the structure in [frontend structure.md](mdc:frontend structure.md) when creating new Vue files, also review and update if needed the [frontend structure.md](mdc:frontend structure.md) every time new files created.

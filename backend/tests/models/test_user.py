@@ -26,14 +26,15 @@ def test_create_user(test_db):
     user_id = str(uuid4())
     user = User(
         id=user_id,
-        role=UserRole.CUSTOMER
+        role=UserRole.CUSTOMER.value,
+        email="test@example.com"
     )
     test_db.add(user)
     test_db.commit()
     test_db.refresh(user)
 
     assert user.id == user_id
-    assert user.role == UserRole.CUSTOMER
+    assert user.role.value == UserRole.CUSTOMER.value
     assert isinstance(user.created_at, datetime)
     assert isinstance(user.updated_at, datetime)
 
@@ -41,7 +42,8 @@ def test_create_admin_manager(test_db):
     """Test creating a new admin/manager."""
     user = User(
         id=str(uuid4()),
-        role=UserRole.ADMIN
+        role=UserRole.ADMIN.value,
+        email="admin@example.com"
     )
     test_db.add(user)
     test_db.commit()
@@ -60,14 +62,15 @@ def test_create_admin_manager(test_db):
     assert admin.user_id == user.id
     assert admin.email == "admin@test.com"
     assert admin.verification_method == "email"
-    assert admin.user.role == UserRole.ADMIN
+    assert admin.user.role.value == UserRole.ADMIN.value
 
 def test_create_customer(test_db):
     """Test creating a new customer."""
     # Create manager user first
     manager = User(
         id=str(uuid4()),
-        role=UserRole.MANAGER
+        role=UserRole.MANAGER.value,
+        email="manager@example.com"
     )
     test_db.add(manager)
     test_db.commit()
@@ -85,7 +88,8 @@ def test_create_customer(test_db):
     # Create customer user
     user = User(
         id=str(uuid4()),
-        role=UserRole.CUSTOMER
+        role=UserRole.CUSTOMER.value,
+        email="customer@example.com"
     )
     test_db.add(user)
     test_db.commit()
@@ -104,13 +108,14 @@ def test_create_customer(test_db):
     assert customer.phone_number == "+1234567890"
     assert customer.created_by == manager.id
     assert customer.assigned_manager_id == manager.id
-    assert customer.user.role == UserRole.CUSTOMER
+    assert customer.user.role.value == UserRole.CUSTOMER.value
 
 def test_create_user_profile(test_db):
     """Test creating a new user profile."""
     user = User(
         id=str(uuid4()),
-        role=UserRole.CUSTOMER
+        role=UserRole.CUSTOMER.value,
+        email="profile@example.com"
     )
     test_db.add(user)
     test_db.commit()
@@ -133,7 +138,11 @@ def test_create_user_profile(test_db):
 def test_user_relationships(test_db):
     """Test relationships between User and related models."""
     # Create manager
-    manager_user = User(id=str(uuid4()), role=UserRole.MANAGER)
+    manager_user = User(
+        id=str(uuid4()), 
+        role=UserRole.MANAGER.value,
+        email="relationship_manager@example.com"
+    )
     test_db.add(manager_user)
     test_db.commit()
 
@@ -147,7 +156,11 @@ def test_user_relationships(test_db):
     test_db.commit()
 
     # Create customer
-    customer_user = User(id=str(uuid4()), role=UserRole.CUSTOMER)
+    customer_user = User(
+        id=str(uuid4()), 
+        role=UserRole.CUSTOMER.value,
+        email="relationship_customer@example.com"
+    )
     test_db.add(customer_user)
     test_db.commit()
 

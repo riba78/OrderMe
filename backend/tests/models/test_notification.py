@@ -22,7 +22,8 @@ def test_create_notification(test_db):
     # Create a user first
     user = User(
         id=str(uuid4()),
-        role=UserRole.CUSTOMER
+        role=UserRole.CUSTOMER.value,
+        email="notification_test@example.com"
     )
     test_db.add(user)
     test_db.commit()
@@ -31,7 +32,7 @@ def test_create_notification(test_db):
     notification = Notification(
         id=notification_id,
         user_id=user.id,
-        type=NotificationType.ORDER_STATUS,
+        type=NotificationType.ORDER_STATUS.value,
         title="Order Status Update",
         message="Your order has been confirmed",
         is_read=False
@@ -53,7 +54,8 @@ def test_notification_relationships(test_db):
     # Create user
     user = User(
         id=str(uuid4()),
-        role=UserRole.CUSTOMER
+        role=UserRole.CUSTOMER.value,
+        email="notification_rel@example.com"
     )
     test_db.add(user)
     test_db.commit()
@@ -62,14 +64,14 @@ def test_notification_relationships(test_db):
     notification1 = Notification(
         id=str(uuid4()),
         user_id=user.id,
-        type=NotificationType.ORDER_STATUS,
+        type=NotificationType.ORDER_STATUS.value,
         title="Order Status Update",
         message="Your order has been confirmed"
     )
     notification2 = Notification(
         id=str(uuid4()),
         user_id=user.id,
-        type=NotificationType.PAYMENT_STATUS,
+        type=NotificationType.PAYMENT_STATUS.value,
         title="Payment Status Update",
         message="Payment received"
     )
@@ -84,14 +86,18 @@ def test_notification_relationships(test_db):
 def test_notification_order_related(test_db):
     """Test creating order-related notifications."""
     # Create user and order
-    user = User(id=str(uuid4()), role=UserRole.CUSTOMER)
+    user = User(
+        id=str(uuid4()), 
+        role=UserRole.CUSTOMER.value,
+        email="notification_order@example.com"
+    )
     test_db.add(user)
     test_db.commit()
 
     order = Order(
         id=str(uuid4()),
         user_id=user.id,
-        status=OrderStatus.PENDING,
+        status=OrderStatus.PENDING.value,
         total_amount=99.99
     )
     test_db.add(order)
@@ -101,7 +107,7 @@ def test_notification_order_related(test_db):
     notification = Notification(
         id=str(uuid4()),
         user_id=user.id,
-        type=NotificationType.ORDER_STATUS,
+        type=NotificationType.ORDER_STATUS.value,
         title="Order Status Update",
         message="Your order has been confirmed",
         related_order_id=order.id
@@ -118,14 +124,18 @@ def test_notification_order_related(test_db):
 
 def test_notification_read_status(test_db):
     """Test notification read status updates."""
-    user = User(id=str(uuid4()), role=UserRole.CUSTOMER)
+    user = User(
+        id=str(uuid4()), 
+        role=UserRole.CUSTOMER.value,
+        email="read_status@example.com"
+    )
     test_db.add(user)
     test_db.commit()
 
     notification = Notification(
         id=str(uuid4()),
         user_id=user.id,
-        type=NotificationType.SYSTEM,
+        type=NotificationType.SYSTEM.value,
         title="System Update",
         message="System maintenance completed",
         is_read=False
@@ -162,7 +172,11 @@ def test_notification_validation():
 
 def test_notification_bulk_creation(test_db):
     """Test creating multiple notifications for a user."""
-    user = User(id=str(uuid4()), role=UserRole.CUSTOMER)
+    user = User(
+        id=str(uuid4()), 
+        role=UserRole.CUSTOMER.value,
+        email="bulk_notifications@example.com"
+    )
     test_db.add(user)
     test_db.commit()
 
@@ -171,7 +185,7 @@ def test_notification_bulk_creation(test_db):
         Notification(
             id=str(uuid4()),
             user_id=user.id,
-            type=NotificationType.SYSTEM,
+            type=NotificationType.SYSTEM.value,
             title=f"Test Notification {i}",
             message=f"Test message {i}"
         )

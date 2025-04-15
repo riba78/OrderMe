@@ -24,7 +24,8 @@ def test_create_order(test_db):
     # Create a customer user first
     user = User(
         id=str(uuid4()),
-        role=UserRole.CUSTOMER
+        role=UserRole.CUSTOMER.value,
+        email="order_customer@example.com"
     )
     test_db.add(user)
     test_db.commit()
@@ -33,7 +34,7 @@ def test_create_order(test_db):
     order = Order(
         id=order_id,
         user_id=user.id,
-        status=OrderStatus.PENDING,
+        status=OrderStatus.PENDING.value,
         total_amount=150.00,
         shipping_address="123 Test St",
         billing_address="123 Test St"
@@ -54,14 +55,18 @@ def test_create_order(test_db):
 def test_create_order_item(test_db):
     """Test creating a new order item."""
     # Create necessary related objects
-    user = User(id=str(uuid4()), role=UserRole.CUSTOMER)
+    user = User(
+        id=str(uuid4()), 
+        role=UserRole.CUSTOMER.value,
+        email="order_item_customer@example.com"
+    )
     test_db.add(user)
     test_db.commit()
 
     order = Order(
         id=str(uuid4()),
         user_id=user.id,
-        status=OrderStatus.PENDING,
+        status=OrderStatus.PENDING.value,
         total_amount=99.99
     )
     test_db.add(order)
@@ -99,7 +104,11 @@ def test_create_order_item(test_db):
 def test_order_relationships(test_db):
     """Test relationships between Order and related models."""
     # Create user
-    user = User(id=str(uuid4()), role=UserRole.CUSTOMER)
+    user = User(
+        id=str(uuid4()), 
+        role=UserRole.CUSTOMER.value,
+        email="relationship_order@example.com"
+    )
     test_db.add(user)
     test_db.commit()
 
@@ -107,7 +116,7 @@ def test_order_relationships(test_db):
     order = Order(
         id=str(uuid4()),
         user_id=user.id,
-        status=OrderStatus.PENDING,
+        status=OrderStatus.PENDING.value,
         total_amount=199.98
     )
     test_db.add(order)
@@ -147,14 +156,18 @@ def test_order_relationships(test_db):
 
 def test_order_status_transitions(test_db):
     """Test order status transitions."""
-    user = User(id=str(uuid4()), role=UserRole.CUSTOMER)
+    user = User(
+        id=str(uuid4()), 
+        role=UserRole.CUSTOMER.value,
+        email="status_transitions@example.com"
+    )
     test_db.add(user)
     test_db.commit()
 
     order = Order(
         id=str(uuid4()),
         user_id=user.id,
-        status=OrderStatus.PENDING,
+        status=OrderStatus.PENDING.value,
         total_amount=99.99
     )
     test_db.add(order)

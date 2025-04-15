@@ -113,7 +113,8 @@ def test_payment_validation():
     }
     payment = PaymentCreate(**valid_data)
     assert payment.amount == valid_data["amount"]
-    assert payment.payment_method_id == valid_data["payment_method_id"]
+    # Compare string representation of UUIDs
+    assert str(payment.payment_method_id) == valid_data["payment_method_id"]
 
     # Test invalid amount
     with pytest.raises(ValueError):

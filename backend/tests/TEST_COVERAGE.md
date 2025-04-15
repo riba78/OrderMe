@@ -9,36 +9,48 @@ This document provides a comprehensive overview of all the tests implemented in 
    - Creates a new user with valid data
    - Verifies default role assignment
    - Validates timestamp fields
+   - Stores enum values as strings for database compatibility
 
 2. **Admin/Manager Creation**
    - Creates admin/manager user
    - Validates email and password fields
    - Tests verification method and TIN/trunk number
+   - Handles proper enum serialization/deserialization
 
 3. **Customer Creation**
    - Creates customer user
    - Validates phone number
    - Tests manager assignment
+   - Ensures proper role handling using enum values
 
 4. **User Profile Creation**
    - Creates user profile
    - Validates personal information fields
    - Tests business name field
+   - Maintains enum consistency across related entities
 
 5. **User Relationships**
    - Tests relationships between User and related models
    - Verifies one-to-one relationships
    - Validates foreign key constraints
+   - Tests proper role value persistence between database operations
 
 6. **User Validation**
    - Tests schema validation
    - Validates email format
    - Checks password requirements
+   - Verifies enum type validation
 
 7. **Admin Manager Validation**
    - Tests admin manager schema
    - Validates required fields
    - Checks email format
+
+### Implementation Notes:
+- User model tests handle SQLite compatibility by using string values (`UserRole.XXX.value`) for enum fields rather than enum objects directly
+- Tests verify both string storage and proper enum type conversion upon retrieval
+- Non-nullable fields (like email) are properly populated in test scenarios
+- Test assertions compare enum values rather than enum objects to avoid reference comparison issues
 
 ## Product Model Tests (`test_product.py`)
 ### Test Cases:
@@ -68,11 +80,13 @@ This document provides a comprehensive overview of all the tests implemented in 
    - Creates new payment
    - Validates amount and status
    - Tests timestamp fields
+   - Properly handles PaymentStatus enum serialization
 
 2. **Payment Method Creation**
    - Creates payment method
    - Validates card details
    - Tests default status
+   - Handles date objects correctly
 
 3. **Payment Info Creation**
    - Creates payment information
@@ -83,11 +97,13 @@ This document provides a comprehensive overview of all the tests implemented in 
    - Tests valid status changes
    - Validates state transitions
    - Checks status constraints
+   - Verifies enum persistence in database operations
 
 5. **Payment Validation**
    - Tests schema validation
    - Validates amount constraints
    - Checks required fields
+   - Properly handles UUID conversions
 
 6. **Payment Method Validation**
    - Tests payment method schema
@@ -99,27 +115,37 @@ This document provides a comprehensive overview of all the tests implemented in 
    - Validates address fields
    - Checks required billing information
 
+### Implementation Notes:
+- Payment model tests demonstrate proper enum type handling between application code and database storage
+- Tests correctly handle UUID objects by comparing string representations when needed
+- Date objects are properly serialized/deserialized
+- Validation tests demonstrate Pydantic's automatic type conversion capabilities
+
 ## Order Model Tests (`test_order.py`)
 ### Test Cases:
 1. **Order Creation**
    - Creates new order
    - Validates total amount
    - Tests shipping/billing addresses
+   - Properly handles OrderStatus enum serialization
 
 2. **Order Item Creation**
    - Creates order items
    - Validates quantity and price
    - Tests product relationships
+   - Maintains proper reference integrity
 
 3. **Order Relationships**
    - Tests relationships with User and OrderItem
    - Validates foreign key constraints
    - Tests bidirectional access
+   - Verifies proper relationship navigation
 
 4. **Order Status Transitions**
    - Tests valid status changes
    - Validates state transitions
    - Checks status constraints
+   - Properly handles enum persistence between operations
 
 5. **Order Validation**
    - Tests schema validation
@@ -131,37 +157,55 @@ This document provides a comprehensive overview of all the tests implemented in 
    - Validates quantity constraints
    - Checks price requirements
 
+### Implementation Notes:
+- Order model tests handle SQLite compatibility by using string values (`OrderStatus.XXX.value`) for enum fields
+- Tests properly initialize related User objects with required email fields
+- Tests verify proper relationship navigation across multiple model types
+- Property-based accessors like `order_status` are verified to work with enum objects
+
 ## Notification Model Tests (`test_notification.py`)
 ### Test Cases:
 1. **Notification Creation**
    - Creates new notification
    - Validates type and message
    - Tests read status
+   - Properly handles NotificationType enum serialization
 
 2. **Notification Relationships**
    - Tests relationships with User
    - Validates foreign key constraints
    - Tests bidirectional access
+   - Verifies multiple notifications per user
 
 3. **Order-Related Notifications**
    - Tests order-related notifications
    - Validates order reference
    - Tests notification type
+   - Verifies bi-directional navigation between Order and Notification
 
 4. **Notification Read Status**
    - Tests read status updates
    - Validates status changes
    - Checks timestamp updates
+   - Verifies database persistence of status changes
 
 5. **Notification Validation**
    - Tests schema validation
    - Validates message format
    - Checks required fields
+   - Ensures notification types are valid
 
 6. **Bulk Notification Creation**
    - Tests multiple notification creation
    - Validates batch operations
    - Checks user assignment
+   - Verifies database persistence
+
+### Implementation Notes:
+- Notification tests handle SQLite compatibility by using string values (`NotificationType.XXX.value`) for enum fields
+- Tests properly initialize related User objects with required email fields
+- Type checking ensures that only valid notification types can be used
+- Bidirectional relationship navigation is verified between Users, Orders, and Notifications
 
 ## Repository Tests
 The repository layer tests validate database operations through mock testing, ensuring all database interactions work as expected.
@@ -246,8 +290,9 @@ The repository layer tests validate database operations through mock testing, en
 - Total Test Files: 11
 - Total Test Cases: 70
 - Repository Test Cases: 40
-- All Tests Passing: Yes
-- Test Execution Time: 0.12s
+- Model Test Cases: 30
+- All Model Tests Passing: Yes (30/30)
+- Test Execution Time (Models): 0.30s
 
 ## Coverage Summary
 The test suite provides comprehensive coverage of both the model and repository layers:
@@ -255,12 +300,14 @@ The test suite provides comprehensive coverage of both the model and repository 
 ### Model Layer Coverage
 - Model creation and initialization
 - Relationship management
-- Enum handling
+- Enum handling and proper serialization
+- SQLite compatibility for enum storage
 - Validation rules
 - Business logic constraints
 - State transitions
 - Default values
 - Timestamp management
+- Handling of non-nullable fields
 
 ### Repository Layer Coverage
 - Database CRUD operations
@@ -271,6 +318,13 @@ The test suite provides comprehensive coverage of both the model and repository 
 - Custom query methods
 - Error handling
 
+### Testing Best Practices Identified
+- Pass string values (`SomeEnum.XXX.value`) of enums instead of enum objects when creating models with SQLite
+- Include all non-nullable fields (like email) in test data
+- Compare string representations of UUIDs rather than UUID objects directly
+- Use property accessors designed for enum fields (like `order_status`) to handle conversion between database strings and application enum objects
+- When updating tests for database compatibility, maintain the original assertions to ensure business logic still works correctly
+
 ## Future Test Considerations
 While the current test suite is comprehensive, future enhancements could include:
 - Integration tests between models and repositories
@@ -279,4 +333,8 @@ While the current test suite is comprehensive, future enhancements could include
 - Concurrent operation testing
 - Error handling scenarios
 - Service layer testing
-- Controller/API endpoint testing 
+- Controller/API endpoint testing
+- Cross-database compatibility testing for different SQL dialects (MySQL, PostgreSQL, SQLite)
+- More robust enum handling and type conversion validation
+- Consistent approach to UUID comparison and object-to-primitive type conversions
+- Standardized test patterns for common serialization/deserialization scenarios 

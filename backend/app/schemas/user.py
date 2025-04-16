@@ -15,21 +15,12 @@ from ..models import UserRole
 from uuid import UUID
 
 class UserBase(BaseModel):
-    email: EmailStr
     role: UserRole = UserRole.CUSTOMER
 
 class UserCreate(UserBase):
-    password: str
-
-    @validator('password')
-    def password_must_be_strong(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        return v
+    pass
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
-    password: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
 
@@ -46,15 +37,15 @@ class AdminManagerBase(BaseModel):
     tin_trunk_number: Optional[str] = None
 
 class AdminManagerCreate(AdminManagerBase):
-    user_id: UUID
+    user_id: Optional[UUID] = None
     password: str = Field(min_length=8)
+    role: UserRole = UserRole.ADMIN
 
 class AdminManagerUpdate(AdminManagerBase):
     password: Optional[str] = Field(min_length=8, default=None)
 
 class AdminManagerResponse(AdminManagerBase):
     user_id: UUID
-    id: UUID
 
     class Config:
         orm_mode = True
@@ -72,7 +63,6 @@ class CustomerUpdate(CustomerBase):
 
 class CustomerResponse(CustomerBase):
     user_id: UUID
-    id: UUID
     created_by: UUID
     assigned_manager_id: UUID
 
@@ -92,7 +82,6 @@ class UserProfileUpdate(UserProfileBase):
 
 class UserProfileResponse(UserProfileBase):
     user_id: UUID
-    id: UUID
 
     class Config:
         orm_mode = True 

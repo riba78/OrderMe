@@ -10,22 +10,29 @@ The models follow SOLID principles and maintain proper relationships
 with User and Order models.
 """
 
-from sqlalchemy import Column, String, Float, ForeignKey, Boolean, Enum, Date
+from sqlalchemy import Column, String, Float, ForeignKey, Boolean, Enum, Date, Numeric
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from datetime import date
 from .base import Base, TimestampMixin
 from .enums import PaymentStatus
+from .user import User
+
+# Use forward references to avoid circular imports
+if TYPE_CHECKING:
+    from .models import Order
 
 class Payment(Base, TimestampMixin):
     __tablename__ = "payments"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # Foreign key fields
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     order_id: Mapped[str] = mapped_column(String(36), ForeignKey("orders.id"), unique=True)
-    amount: Mapped[float] = mapped_column(Float, nullable=False)
-    status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
     payment_method_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("payment_methods.id"))
+    # Data fields
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
     transaction_id: Mapped[Optional[str]] = mapped_column(String(255))
     
     # Relationships
@@ -37,7 +44,9 @@ class PaymentMethod(Base, TimestampMixin):
     __tablename__ = "payment_methods"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # Foreign key fields
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    # Data fields
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     provider: Mapped[Optional[str]] = mapped_column(String(50))
     last_four: Mapped[Optional[str]] = mapped_column(String(4))
@@ -53,8 +62,10 @@ class PaymentInfo(Base, TimestampMixin):
     __tablename__ = "payment_info"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    # Foreign key fields
     payment_method_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("payment_methods.id"), unique=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    # Data fields
     billing_street: Mapped[Optional[str]] = mapped_column(String(255))
     billing_city: Mapped[Optional[str]] = mapped_column(String(100))
     billing_zip: Mapped[Optional[str]] = mapped_column(String(20))

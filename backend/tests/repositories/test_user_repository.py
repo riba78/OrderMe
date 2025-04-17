@@ -9,13 +9,22 @@ from app.models.user import UserRole  # Keep this for enum values
 
 # Mock User class
 class MockUser:
-    def __init__(self, id=None, email=None, role=None, is_active=True, created_at=None, updated_at=None):
+    def __init__(self, id=None, role=None, is_active=True, created_at=None, updated_at=None):
         self.id = id or str(uuid4())
-        self.email = email
         self.role = role
         self.is_active = is_active
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
+
+# Mock AdminManager class
+class MockAdminManager:
+    def __init__(self, user_id=None, email=None, hashed_password=None, verification_method=None, tin_trunk_number=None):
+        self.user_id = user_id or str(uuid4())
+        self.email = email
+        self.hashed_password = hashed_password
+        self.verification_method = verification_method
+        self.tin_trunk_number = tin_trunk_number
+        self.user = None  # Will be set in tests if needed
 
 @pytest.fixture
 def mock_db():
@@ -37,21 +46,27 @@ def test_user():
     return MockUser(
         id=str(uuid4()),
         role=UserRole.CUSTOMER,
-        email="test@example.com",
         is_active=True
     )
 
-def test_get_by_email(user_repo, test_user):
-    """Test retrieving a user by email."""
-    # Arrange
-    user_repo.session.query().filter().first.return_value = test_user
+@pytest.fixture
+def test_admin():
+    """Create a test admin."""
+    user = MockUser(
+        id=str(uuid4()),
+        role=UserRole.ADMIN,
+        is_active=True
+    )
     
-    # Act
-    result = user_repo.get_by_email(test_user.email)
+    admin = MockAdminManager(
+        user_id=user.id,
+        email="admin@example.com",
+        hashed_password="hashed_password",
+        verification_method="email"
+    )
+    admin.user = user
     
-    # Assert
-    assert result == test_user
-    # No assert on mock calls
+    return admin
 
 def test_get_active_users(user_repo):
     """Test retrieving active users."""
@@ -106,7 +121,6 @@ def test_create_user(user_repo):
     """Test creating a new user."""
     # Arrange
     user_data = {
-        "email": "new@example.com",
         "role": UserRole.CUSTOMER,
         "is_active": True
     }
@@ -121,7 +135,6 @@ def test_create_user(user_repo):
     
     # Assert
     assert result == new_user
-    assert result.email == "new@example.com"
     assert result.role == UserRole.CUSTOMER
     assert result.is_active is True
 
@@ -137,7 +150,6 @@ def test_update_user(user_repo, test_user):
     user_repo.update = MagicMock()
     updated_user = MockUser(
         id=test_user.id,
-        email=test_user.email,  # Email shouldn't change
         role=UserRole.ADMIN,    # Role should be updated
         is_active=False         # Active status should be updated
     )
@@ -149,6 +161,5 @@ def test_update_user(user_repo, test_user):
     # Assert
     assert result == updated_user
     assert result.id == test_user.id
-    assert result.email == test_user.email  # Email should remain the same
     assert result.role == UserRole.ADMIN    # Role should be updated
     assert result.is_active is False       # Active status should be updated 

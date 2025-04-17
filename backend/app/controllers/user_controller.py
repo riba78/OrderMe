@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
-from app.models.models import User, UserRole
+from app.models.user import User
+from app.models.enums import UserRole
 from app.database import get_db
 from app.controllers.auth_controller import get_current_user
 from ..services.user_service import UserService

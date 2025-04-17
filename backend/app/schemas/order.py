@@ -18,6 +18,10 @@ class OrderItemBase(BaseModel):
 class OrderItemCreate(OrderItemBase):
     pass
 
+class OrderItemUpdate(BaseModel):
+    quantity: Optional[int] = Field(None, gt=0)
+    unit_price: Optional[float] = Field(None, gt=0)
+
 class OrderItemResponse(OrderItemBase):
     id: UUID
     order_id: UUID
@@ -33,7 +37,7 @@ class OrderBase(BaseModel):
     status: OrderStatus = OrderStatus.PENDING
 
 class OrderCreate(OrderBase):
-    pass
+    items: List[OrderItemCreate]
 
 class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None

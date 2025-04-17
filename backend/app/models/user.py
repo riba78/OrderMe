@@ -31,7 +31,6 @@ class User(Base, TimestampMixin):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     _role = Column("role", String(20), nullable=False)
-    email = Column(String(255), unique=True, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -119,19 +118,35 @@ class Address(Base, TimestampMixin):
 class UserBase(BaseModel):
     role: UserRole
 
-class UserCreate(UserBase):
+class AdminManagerCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
+    role: UserRole = UserRole.ADMIN
+    verification_method: str
+
+class UserCreate(UserBase):
     role: UserRole = UserRole.CUSTOMER
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+
+class AdminManagerUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    verification_method: Optional[str] = None
+    tin_trunk_number: Optional[str] = None
 
 class UserResponse(UserBase):
     id: str
     is_active: bool
 
+    class Config:
+        orm_mode = True
+
+class AdminManagerResponse(BaseModel):
+    email: EmailStr
+    verification_method: str
+    tin_trunk_number: Optional[str] = None
+    
     class Config:
         orm_mode = True

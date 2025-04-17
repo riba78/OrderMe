@@ -11,9 +11,10 @@ Tests cover:
 
 import pytest
 from uuid import uuid4
-from datetime import datetime
-from app.models import Product, Category
+from datetime import date
+from app.models import Product, Category, UserRole
 from app.schemas.product import ProductCreate, CategoryCreate
+from decimal import Decimal
 
 def test_create_category(test_db):
     """Test creating a new category."""
@@ -21,7 +22,7 @@ def test_create_category(test_db):
     category = Category(
         id=category_id,
         name="Test Category",
-        description="Test Description"
+        description="This is a test category"
     )
     test_db.add(category)
     test_db.commit()
@@ -29,25 +30,18 @@ def test_create_category(test_db):
 
     assert category.id == category_id
     assert category.name == "Test Category"
-    assert category.description == "Test Description"
-    assert isinstance(category.created_at, datetime)
-    assert isinstance(category.updated_at, datetime)
+    assert category.description == "This is a test category"
+    assert isinstance(category.created_at, date)
+    assert isinstance(category.updated_at, date)
 
 def test_create_product(test_db):
-    """Test creating a new product."""
+    """Test creating a product."""
     category_id = str(uuid4())
-    category = Category(
-        id=category_id,
-        name="Test Category"
-    )
-    test_db.add(category)
-    test_db.commit()
-
     product_id = str(uuid4())
+    
     product = Product(
         id=product_id,
-        name="Test Product",
-        description="Test Description",
+        product_name="Test Product",
         price=99.99,
         created_by=str(uuid4()),
         category_id=category_id,
@@ -60,25 +54,27 @@ def test_create_product(test_db):
     test_db.refresh(product)
 
     assert product.id == product_id
-    assert product.name == "Test Product"
-    assert product.price == 99.99
+    assert product.product_name == "Test Product"
+    assert float(product.price) == 99.99
     assert product.category_id == category_id
-    assert product.is_available == True  # Default value
+    assert product.min_stock_level == 10
+    assert product.max_stock_level == 100
     assert product.qty_in_stock == 50
-    assert isinstance(product.created_at, datetime)
+    assert isinstance(product.created_at, date)
 
 def test_product_category_relationship(test_db):
     """Test the relationship between Product and Category."""
     category = Category(
         id=str(uuid4()),
-        name="Test Category"
+        name="Test Category",
+        description="This is a test category"
     )
     test_db.add(category)
     test_db.commit()
 
     product = Product(
         id=str(uuid4()),
-        name="Test Product",
+        product_name="Test Product",
         price=99.99,
         created_by=str(uuid4()),
         category_id=category.id,
@@ -94,14 +90,18 @@ def test_product_category_relationship(test_db):
     assert product.category.name == "Test Category"
     assert len(category.products) == 1
     assert category.products[0].id == product.id
+    assert category.products[0].product_name == "Test Product"
 
 def test_product_validation():
     """Test ProductCreate schema validation."""
+    # Import here to avoid circular imports in tests
+    from app.schemas.product import ProductCreate
+    
     # Valid product data
     valid_data = {
-        "name": "Test Product",
+        "product_name": "Test Product",
         "description": "Test Description",
-        "price": 99.99,
+        "price": Decimal("99.99"),
         "category_id": str(uuid4()),
         "created_by": str(uuid4()),
         "min_stock_level": 10,
@@ -109,16 +109,21 @@ def test_product_validation():
         "qty_in_stock": 50
     }
     product = ProductCreate(**valid_data)
-    assert product.name == valid_data["name"]
-    assert product.price == valid_data["price"]
+    assert product.product_name == "Test Product"
+    assert product.price == Decimal("99.99")
+    assert product.min_stock_level == 10
 
     # Test invalid price
     with pytest.raises(ValueError):
-        ProductCreate(**{**valid_data, "price": -10})
+        ProductCreate(**{**valid_data, "price": Decimal("-10")})
 
     # Test invalid stock levels
     with pytest.raises(ValueError):
         ProductCreate(**{**valid_data, "min_stock_level": -1})
     
     with pytest.raises(ValueError):
-        ProductCreate(**{**valid_data, "max_stock_level": -1}) 
+        ProductCreate(**{**valid_data, "max_stock_level": -1})
+        
+    # Test max_stock_level <= min_stock_level
+    with pytest.raises(ValueError):
+        ProductCreate(**{**valid_data, "min_stock_level": 100, "max_stock_level": 10}) 

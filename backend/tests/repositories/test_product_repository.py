@@ -13,15 +13,14 @@ from app.repositories.product_repository import ProductRepository, CategoryRepos
 
 # Mock classes
 class MockProduct:
-    def __init__(self, id=None, name=None, description=None, price=None, stock=None, 
-                 category_id=None, image_url=None, is_available=True, created_at=None, updated_at=None):
+    def __init__(self, id=None, product_name=None, description=None, price=None, stock=None, 
+                 category_id=None, is_available=True, created_at=None, updated_at=None):
         self.id = id or str(uuid4())
-        self.name = name
+        self.product_name = product_name
         self.description = description
         self.price = price
         self.stock = stock
         self.category_id = category_id
-        self.image_url = image_url
         self.is_available = is_available
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
@@ -67,12 +66,11 @@ def test_product(test_category):
     """Create a test product."""
     return MockProduct(
         id=str(uuid4()),
-        name="Test Product",
+        product_name="Test Product",
         description="Test Product Description",
         price=100.00,
         stock=10,
         category_id=test_category.id,
-        image_url="https://example.com/image.jpg",
         is_available=True
     )
 
@@ -120,7 +118,7 @@ def test_search_products(product_repo):
     # Arrange
     query = "test"
     mock_products = [
-        MockProduct(id=str(uuid4()), name="Test Product"),
+        MockProduct(id=str(uuid4()), product_name="Test Product"),
         MockProduct(id=str(uuid4()), description="This is a test")
     ]
     
@@ -177,7 +175,7 @@ def test_update_product(product_repo, test_product):
     """Test updating a product."""
     # Arrange
     update_data = {
-        "name": "Updated Product",
+        "product_name": "Updated Product",
         "stock": 20
     }
     
@@ -185,12 +183,11 @@ def test_update_product(product_repo, test_product):
     product_repo.update = MagicMock()
     updated_product = MockProduct(
         id=test_product.id,
-        name="Updated Product",
+        product_name="Updated Product",
         description=test_product.description,
         price=test_product.price,
         stock=20,
         category_id=test_product.category_id,
-        image_url=test_product.image_url,
         is_available=test_product.is_available
     )
     product_repo.update.return_value = updated_product
@@ -201,6 +198,6 @@ def test_update_product(product_repo, test_product):
     # Assert
     assert result == updated_product
     assert result.id == test_product.id
-    assert result.name == "Updated Product"
+    assert result.product_name == "Updated Product"
     assert result.stock == 20
     product_repo.update.assert_called_once_with(test_product.id, update_data) 

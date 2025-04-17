@@ -7,18 +7,11 @@ Models are organized by domain and follow SOLID principles.
 
 from .base import Base, TimestampMixin
 from .enums import UserRole, OrderStatus, PaymentStatus, NotificationType
-from .models import (
-    User,
-    AdminManager,
-    Customer,
-    UserProfile,
-    Category,
-    Product,
-    Order,
-    OrderItem,
-    Notification
-)
+from .user import User, AdminManager, Customer, UserProfile
+from .product import Product, Category
+from .order import Order, OrderItem
 from .payment import Payment, PaymentMethod, PaymentInfo
+from .notification import Notification
 
 __all__ = [
     'Base',

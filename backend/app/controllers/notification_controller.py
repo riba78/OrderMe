@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
-from app.models.models import Notification, NotificationType
+from app.models.notification import Notification
+from app.models.enums import NotificationType
 from app.database import get_db
 from app.controllers.auth_controller import get_current_user
 

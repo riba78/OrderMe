@@ -15,7 +15,7 @@ class NotificationBase(BaseModel):
     title: str = Field(..., min_length=1)
     message: str
     is_read: bool = False
-    related_order_id: Optional[UUID] = None
+    order_id: Optional[UUID] = None
 
 class NotificationCreate(NotificationBase):
     """Schema for creating a new notification."""

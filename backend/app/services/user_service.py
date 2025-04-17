@@ -22,10 +22,9 @@ from ..schemas.user import UserCreate, UserUpdate
 class UserService:
     def __init__(self, user_repository: UserRepository):
         self.user_repository = user_repository
-        self.db = user_repository.db
 
-    def get_user(self, user_id: int) -> Optional[User]:
-        return self.user_repository.get(user_id)
+    def get_user(self, user_id: str) -> Optional[User]:
+        return self.user_repository.get_by_id(user_id)
 
     def get_user_by_email(self, email: str) -> Optional[User]:
         return self.user_repository.get_by_email(email)
@@ -34,22 +33,21 @@ class UserService:
         return self.user_repository.get_all()
 
     def create_user(self, user_data: UserCreate) -> User:
-        user = User(
-            email=user_data.email,
-            hashed_password=user_data.password,  # Note: Password should be hashed before this
-            role=user_data.role
-        )
-        return self.user_repository.create(user)
+        user_dict = {
+            "email": user_data.email,
+            "hashed_password": user_data.password,  # Note: Password should be hashed before this
+            "role": user_data.role
+        }
+        return self.user_repository.create(user_dict)
 
-    def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[User]:
-        user = self.user_repository.get(user_id)
+    def update_user(self, user_id: str, user_data: UserUpdate) -> Optional[User]:
+        user = self.user_repository.get_by_id(user_id)
         if user:
-            for key, value in user_data.dict(exclude_unset=True).items():
-                setattr(user, key, value)
-            return self.user_repository.update(user)
+            data = user_data.dict(exclude_unset=True)
+            return self.user_repository.update(user_id, data)
         return None
 
-    def delete_user(self, user_id: int) -> bool:
+    def delete_user(self, user_id: str) -> bool:
         return self.user_repository.delete(user_id)
 
     def get_active_users(self) -> List[User]:

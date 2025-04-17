@@ -6,6 +6,7 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.order_repository import OrderRepository
 from app.repositories.product_repository import ProductRepository, CategoryRepository
 from app.repositories.payment_repository import PaymentRepository, PaymentMethodRepository, PaymentInfoRepository
+from app.repositories.interfaces.product_repository import IProductRepository, ICategoryRepository
 from app.services.user_service import UserService
 from app.services.order_service import OrderService
 from app.services.product_service import ProductService, CategoryService
@@ -30,19 +31,19 @@ def get_order_repository(db: Session = Depends(get_db)) -> OrderRepository:
 def get_order_service(order_repository: OrderRepository = Depends(get_order_repository)) -> OrderService:
     return OrderService(order_repository)
 
-def get_product_repository(db: Session = Depends(get_db)) -> ProductRepository:
+def get_product_repository(db: Session = Depends(get_db)) -> IProductRepository:
     return ProductRepository(db)
 
-def get_category_repository(db: Session = Depends(get_db)) -> CategoryRepository:
+def get_category_repository(db: Session = Depends(get_db)) -> ICategoryRepository:
     return CategoryRepository(db)
 
 def get_product_service(
-    product_repository: ProductRepository = Depends(get_product_repository),
-    category_repository: CategoryRepository = Depends(get_category_repository)
+    product_repository: IProductRepository = Depends(get_product_repository),
+    category_repository: ICategoryRepository = Depends(get_category_repository)
 ) -> ProductService:
     return ProductService(product_repository, category_repository)
 
-def get_category_service(category_repository: CategoryRepository = Depends(get_category_repository)) -> CategoryService:
+def get_category_service(category_repository: ICategoryRepository = Depends(get_category_repository)) -> CategoryService:
     return CategoryService(category_repository)
 
 def get_payment_repository(db: Session = Depends(get_db)) -> PaymentRepository:
@@ -57,9 +58,10 @@ def get_payment_info_repository(db: Session = Depends(get_db)) -> PaymentInfoRep
 def get_payment_service(
     payment_repository: PaymentRepository = Depends(get_payment_repository),
     payment_method_repository: PaymentMethodRepository = Depends(get_payment_method_repository),
-    payment_info_repository: PaymentInfoRepository = Depends(get_payment_info_repository)
+    payment_info_repository: PaymentInfoRepository = Depends(get_payment_info_repository),
+    order_repository: OrderRepository = Depends(get_order_repository)
 ) -> PaymentService:
-    return PaymentService(payment_repository, payment_method_repository, payment_info_repository)
+    return PaymentService(payment_repository, payment_method_repository, payment_info_repository, order_repository)
 
 def get_payment_method_service(
     payment_method_repository: PaymentMethodRepository = Depends(get_payment_method_repository)

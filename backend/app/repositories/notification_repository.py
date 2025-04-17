@@ -14,7 +14,7 @@ for notification-related database operations.
 
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from ..models.models import Notification
+from ..models.notification import Notification
 from ..models.enums import NotificationType
 from .base_repository import BaseRepository
 
@@ -42,7 +42,7 @@ class NotificationRepository(BaseRepository):
 
     def get_by_order_id(self, order_id: str) -> List[Notification]:
         """Get all notifications related to a specific order."""
-        return self.session.query(Notification).filter(Notification.related_order_id == order_id).all()
+        return self.session.query(Notification).filter(Notification.order_id == order_id).all()
     
     def mark_as_read(self, notification_id: str) -> Optional[Notification]:
         """Mark a notification as read."""

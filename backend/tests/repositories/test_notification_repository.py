@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 from app.models.enums import NotificationType
 from app.repositories.notification_repository import NotificationRepository
-from app.models.models import Notification
+from app.models.notification import Notification
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def notification_repo(mock_db):
         mock_notification_class.user_id = MagicMock()
         mock_notification_class._type = MagicMock()
         mock_notification_class.is_read = MagicMock()
-        mock_notification_class.related_order_id = MagicMock()
+        mock_notification_class.order_id = MagicMock()
         
         yield repo
 
@@ -63,7 +63,7 @@ def test_notifications(test_user, test_order):
             _type=NotificationType.ORDER_STATUS.value,
             message="Your order is pending",
             is_read=False,
-            related_order_id=test_order
+            order_id=test_order
         ),
         MagicMock(
             id=str(uuid4()),
@@ -71,7 +71,7 @@ def test_notifications(test_user, test_order):
             _type=NotificationType.PAYMENT.value,
             message="Payment confirmed",
             is_read=True,
-            related_order_id=test_order
+            order_id=test_order
         ),
         MagicMock(
             id=str(uuid4()),
@@ -79,7 +79,7 @@ def test_notifications(test_user, test_order):
             _type=NotificationType.SYSTEM.value,
             message="System notification",
             is_read=False,
-            related_order_id=None
+            order_id=None
         )
     ]
     return notifications
@@ -158,7 +158,7 @@ def test_get_by_type_with_user_filter(notification_repo, test_user, test_notific
 def test_get_by_order_id(notification_repo, test_order, test_notifications):
     """Test retrieving notifications related to a specific order."""
     # Arrange
-    order_notifications = [n for n in test_notifications if n.related_order_id == test_order]
+    order_notifications = [n for n in test_notifications if n.order_id == test_order]
     
     # Directly mock the method
     get_by_order_id_mock = MagicMock(return_value=order_notifications)

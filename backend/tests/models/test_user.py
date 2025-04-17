@@ -26,8 +26,7 @@ def test_create_user(test_db):
     user_id = str(uuid4())
     user = User(
         id=user_id,
-        role=UserRole.CUSTOMER.value,
-        email="test@example.com"
+        role=UserRole.CUSTOMER.value
     )
     test_db.add(user)
     test_db.commit()
@@ -42,8 +41,7 @@ def test_create_admin_manager(test_db):
     """Test creating a new admin/manager."""
     user = User(
         id=str(uuid4()),
-        role=UserRole.ADMIN.value,
-        email="admin@example.com"
+        role=UserRole.ADMIN.value
     )
     test_db.add(user)
     test_db.commit()
@@ -69,8 +67,7 @@ def test_create_customer(test_db):
     # Create manager user first
     manager = User(
         id=str(uuid4()),
-        role=UserRole.MANAGER.value,
-        email="manager@example.com"
+        role=UserRole.MANAGER.value
     )
     test_db.add(manager)
     test_db.commit()
@@ -88,8 +85,7 @@ def test_create_customer(test_db):
     # Create customer user
     user = User(
         id=str(uuid4()),
-        role=UserRole.CUSTOMER.value,
-        email="customer@example.com"
+        role=UserRole.CUSTOMER.value
     )
     test_db.add(user)
     test_db.commit()
@@ -114,8 +110,7 @@ def test_create_user_profile(test_db):
     """Test creating a new user profile."""
     user = User(
         id=str(uuid4()),
-        role=UserRole.CUSTOMER.value,
-        email="profile@example.com"
+        role=UserRole.CUSTOMER.value
     )
     test_db.add(user)
     test_db.commit()
@@ -140,8 +135,7 @@ def test_user_relationships(test_db):
     # Create manager
     manager_user = User(
         id=str(uuid4()), 
-        role=UserRole.MANAGER.value,
-        email="relationship_manager@example.com"
+        role=UserRole.MANAGER.value
     )
     test_db.add(manager_user)
     test_db.commit()
@@ -158,8 +152,7 @@ def test_user_relationships(test_db):
     # Create customer
     customer_user = User(
         id=str(uuid4()), 
-        role=UserRole.CUSTOMER.value,
-        email="relationship_customer@example.com"
+        role=UserRole.CUSTOMER.value
     )
     test_db.add(customer_user)
     test_db.commit()
@@ -188,33 +181,23 @@ def test_user_relationships(test_db):
 def test_user_validation():
     """Test UserCreate schema validation."""
     valid_data = {
-        "role": UserRole.CUSTOMER,
-        "email": "test@example.com",
-        "password": "securepass123"
+        "role": UserRole.CUSTOMER
     }
     user = UserCreate(**valid_data)
     assert user.role == UserRole.CUSTOMER
-    assert user.email == "test@example.com"
-
-    # Test invalid email
-    with pytest.raises(ValueError):
-        UserCreate(**{**valid_data, "email": "invalid-email"})
-
-    # Test invalid password (too short)
-    with pytest.raises(ValueError):
-        UserCreate(**{**valid_data, "password": "short"})
 
 def test_admin_manager_validation():
     """Test AdminManagerCreate schema validation."""
     valid_data = {
-        "user_id": str(uuid4()),
         "email": "admin@test.com",
         "password": "securepassword",  # Will be hashed
         "verification_method": "email",
-        "tin_trunk_number": "12345"
+        "tin_trunk_number": "12345",
+        "role": UserRole.ADMIN
     }
     admin = AdminManagerCreate(**valid_data)
     assert admin.email == valid_data["email"]
+    assert admin.role == UserRole.ADMIN
 
     # Test invalid email
     with pytest.raises(ValueError):

@@ -13,7 +13,9 @@ from app.controllers import (
     notification_controller
 )
 from app.config import DATABASE_URL
-from app.database import engine, Base
+from app.models.base import Base
+from app.database import engine
+from app.utils.notification_handlers import register_event_handlers
 
 app = FastAPI(
     title="OrderMe API",
@@ -37,9 +39,9 @@ app.add_middleware(
 app.include_router(auth_controller.router, prefix="/auth", tags=["Authentication"])
 app.include_router(user_controller.router, prefix="/users", tags=["Users"])
 app.include_router(product_controller.router, prefix="/products", tags=["Products"])
+app.include_router(category_controller.router, prefix="/categories", tags=["Categories"])
 app.include_router(order_controller.router, prefix="/orders", tags=["Orders"])
 app.include_router(payment_controller.router, prefix="/payments", tags=["Payments"])
-app.include_router(category_controller.router, prefix="/categories", tags=["Categories"])
 app.include_router(notification_controller.router, prefix="/notifications", tags=["Notifications"])
 
 # Health check endpoint
@@ -73,6 +75,10 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
 async def startup_event():
     # Create database tables
     Base.metadata.create_all(bind=engine)
+    
+    # Register domain event handlers
+    register_event_handlers()
+    
     # Add any other startup tasks here
 
 @app.on_event("shutdown")

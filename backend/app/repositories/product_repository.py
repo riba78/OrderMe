@@ -13,12 +13,14 @@ It extends the BaseRepository and provides specialized methods
 for product and category-related database operations.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from ..models.product import Product, Category
 from .base_repository import BaseRepository
+from .interfaces.product_repository import IProductRepository, ICategoryRepository
 
-class ProductRepository(BaseRepository):
+
+class ProductRepository(BaseRepository, IProductRepository):
     def __init__(self, session: Session):
         super().__init__(Product, session)
 
@@ -30,11 +32,12 @@ class ProductRepository(BaseRepository):
 
     def search_products(self, query: str) -> List[Product]:
         return self.session.query(Product).filter(
-            Product.name.ilike(f"%{query}%") | 
+            Product.product_name.ilike(f"%{query}%") | 
             Product.description.ilike(f"%{query}%")
         ).all()
 
-class CategoryRepository(BaseRepository):
+
+class CategoryRepository(BaseRepository, ICategoryRepository):
     def __init__(self, session: Session):
         super().__init__(Category, session)
 

@@ -3,45 +3,29 @@ Payment Controller Module
 
 This module handles all payment-related endpoints including:
 - Payment processing
+- Payment status updates
 - Payment method management
 - Payment information management
-- Payment status updates
 - Refund processing
 
-It provides comprehensive payment functionality including payment
-method management, payment processing, and refund handling.
+It provides CRUD operations for payments and includes payment-specific
+functionality like processing and refunds.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
-from pydantic import BaseModel
-from app.models.models import Payment, PaymentStatus, Order
+from typing import List, Optional
+from datetime import datetime, timedelta
+from uuid import UUID
+
+from app.models.payment import Payment, PaymentStatus, PaymentMethod, PaymentInfo
+from app.models.order import Order
+from app.services.payment_service import PaymentService, PaymentMethodService, PaymentInfoService
+from app.schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse, PaymentMethodCreate, PaymentMethodUpdate, PaymentMethodResponse, PaymentInfoCreate, PaymentInfoUpdate, PaymentInfoResponse
 from app.database import get_db
-from app.controllers.auth_controller import get_current_user
-from ..services.payment_service import PaymentService
-from ..schemas.payment import PaymentCreate, PaymentUpdate, PaymentResponse, PaymentMethodCreate, PaymentMethodUpdate, PaymentMethodResponse, PaymentInfoCreate, PaymentInfoResponse
-from ..dependencies import get_payment_service
-from ..models.payment import PaymentStatus
+from app.dependencies import get_payment_service, get_payment_method_service, get_payment_info_service
 
 router = APIRouter()
-
-# Pydantic models
-class PaymentCreate(BaseModel):
-    order_id: int
-    amount: float
-    payment_method: str
-
-class PaymentResponse(BaseModel):
-    id: int
-    order_id: int
-    amount: float
-    status: PaymentStatus
-    payment_method: str
-    transaction_id: str = None
-
-    class Config:
-        orm_mode = True
 
 # Endpoints
 @router.get("/test")

@@ -1,0 +1,15 @@
+.env
+*.env
+
+# Ignore the create_tables and drop_tables scripts
+backend/app/create_tables.py
+backend/app/drop_tables.py
+backend/app/create_admin.py
+backend/app/create_manager.py
+backend/app/create_customer.py
+backend/app/create_order.py
+backend/app/create_product.py
+backend/app/create_order_item.py
+backend/app/check_connection.py
+backend/app/admin_signin.py
+

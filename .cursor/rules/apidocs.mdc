@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+[api_documentation.md](mdc:api_documentation.md)

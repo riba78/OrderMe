@@ -1,0 +1,12 @@
+fastapi>=0.95.0
+uvicorn[standard]>=0.22.0
+pydantic>=2.0
+email-validator>=1.3.0
+sqlalchemy>=2.0.0          # Required for AsyncAttrs
+greenlet>=3.2.0           # required for SQLAlchemy async support
+asyncmy>=0.2.10
+alembic>=1.10.0
+python-jose[cryptography]>=3.3.0  # for JWT support
+passlib==1.7.4            # Specify exact version
+bcrypt==3.2.2            # Use older, more stable version
+python-dotenv>=1.0.0      # for environment variable management

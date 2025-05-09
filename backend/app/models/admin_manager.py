@@ -33,7 +33,7 @@ class AdminManager(Base, TimestampMixing):
 
     tin_trunk_number = Column(
         String(50),
-        nullable=False
+        nullable=True
     )
 
     verification_method = Column(

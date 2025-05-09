@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 from ...models import User
 from ...schemas import UserCreate, UserResponse
+from ...schemas.admin_manager import AdminManagerCreate
 
 class IUserRepository(ABC):
     """Abstract interface for async CRUD and lookup methods on User entities."""
@@ -34,6 +35,10 @@ class IUserRepository(ABC):
 
     @abstractmethod
     async def find_by_phone(self, phone: str) -> Optional[User]:
+        pass
+
+    @abstractmethod
+    async def create_user_with_credentials(self, creds: AdminManagerCreate) -> User:
         pass
 
 

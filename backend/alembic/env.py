@@ -75,7 +75,8 @@ async def run_async_migrations():
     """In this scenario we need to create an Engine
     and associate a connection with the context.
     """
-    ssl_args = {"ssl": {"ssl_ca": "/Applications/XAMPP/xamppfiles/phpmyadmin/DigiCertGlobalRootCA.crt.pem"}} if ENV == "production" else {}
+    # Use SSL in both development and production
+    ssl_args = {"ssl": {"ssl_ca": "/Applications/XAMPP/xamppfiles/phpmyadmin/DigiCertGlobalRootCA.crt.pem"}}
     
     connectable = create_async_engine(db_url, connect_args=ssl_args)
 

@@ -5,6 +5,7 @@ from ..repositories.interfaces.user_repository import IUserRepository
 from ..utils.security import hash_password, verify_password, create_access_token
 from ..schemas.auth import Token
 from ..schemas.admin_manager import AdminManagerCreate
+from ..models.admin_manager import VerificationMethod
 
 class AuthService:
     def __init__(self, user_repo: IUserRepository):
@@ -15,11 +16,11 @@ class AuthService:
         if existing:
             print(f"[signup] Email already registered: {email}")
             raise HTTPException(status_code=400, detail="Email already registered")
-        creds = AdminManagerCreate(email=email, password=password, verification_method="email")
+        creds = AdminManagerCreate(email=email, password=password, verification_method=VerificationMethod.email)
         #Hash password and store in AdminManager table
         hashed = hash_password(password)
         print(f"[signup] Creating user with email: {email}")
-        await self.user_repo.repository.create_user_with_credentials(creds)
+        await self.user_repo.create_user_with_credentials(creds)
 
     async def signin(self, email: str, password: str) -> Token:
         print(f"[signin] Attempting signin for email: {email}")

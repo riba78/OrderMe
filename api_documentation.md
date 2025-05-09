@@ -15,6 +15,10 @@
 
 - **Endpoint:** `POST /auth/signup`
 - **Description:** Register a new user account.
+  - New users are always created with the `manager` role by default.
+  - The `verification_method` is set to `"email"` automatically.
+  - The `tin_trunk_number` is optional and not required in the request.
+  - Only users with the `manager` role can be created via this endpoint. Admins must be created manually by an administrator.
 - **Request Body:**
     ```json
     {
@@ -29,6 +33,10 @@
       "detail": "User created successfully"
     }
     ```
+- **Notes:**
+  - The `verification_method` is set to `"email"` by default; you do not need to provide it.
+  - The `tin_trunk_number` is optional and not required for signup.
+  - Only users with the `manager` role can be created via this endpoint. Admins must be created manually by an administrator.
 
 ---
 

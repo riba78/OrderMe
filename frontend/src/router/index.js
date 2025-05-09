@@ -3,11 +3,13 @@ import Home from '@/pages/Home.vue'
 import AdminDashboard from '@/pages/AdminDashboard.vue'
 import ManagerDashboard from '@/pages/ManagerDashboard.vue'
 import SignIn from '@/pages/SignIn.vue'
+import SignUp from '@/pages/SignUp.vue'
 import store from '@/store'
 
 const routes = [
   { path: '/', component: Home },
   { path: '/signin', component: SignIn },
+  { path: '/signup', component: SignUp },
   { 
     path: '/admin/dashboard', 
     component: AdminDashboard,

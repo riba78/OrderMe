@@ -23,4 +23,6 @@ class UserUpdate(BaseModel):
 class UserResponse(IDModel, TimestampModel):
     role: UserRole 
     is_active: bool
+    email: Optional[str] = None
+    phone: Optional[str] = None
 

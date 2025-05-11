@@ -2,7 +2,7 @@
 
 import enum
 from sqlalchemy import Column, CHAR, String, Enum, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from .base import Base, TimestampMixing
 
 class VerificationMethod(enum.Enum):

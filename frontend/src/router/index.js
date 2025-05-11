@@ -4,6 +4,7 @@ import AdminDashboard from '@/pages/AdminDashboard.vue'
 import ManagerDashboard from '@/pages/ManagerDashboard.vue'
 import SignIn from '@/pages/SignIn.vue'
 import SignUp from '@/pages/SignUp.vue'
+import Users from '@/views/admin/Users.vue'
 import store from '@/store'
 
 const routes = [
@@ -35,7 +36,16 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const isAuthenticated = localStorage.getItem('token')
-  const userRole = store.getters.userRole
+  let userRole = store.getters.userRole
+
+  // Fallback: try to get role from currentUser in store
+  if (!userRole && store.getters.currentUser) {
+    userRole = store.getters.currentUser.role
+  }
+  // Fallback: try to get role from localStorage (if you store it there)
+  if (!userRole && localStorage.getItem('userRole')) {
+    userRole = localStorage.getItem('userRole')
+  }
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/signin')

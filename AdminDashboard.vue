@@ -3,7 +3,7 @@
   <div class="admin-dashboard">
     <nav class="admin-nav">
       <div class="nav-left">
-        <router-link to="/admin/users" class="nav-item">
+        <router-link to="/admin/dashboard/users" class="nav-item">
           <i class="fas fa-users"></i> Users
         </router-link>
         <router-link to="/admin/customers" class="nav-item">
@@ -23,53 +23,57 @@
         <p>{{ stats.totalUsers }}</p>
       </div>
       <div class="stat-card">
-        <h3>Active Customers</h3>
-        <p>{{ stats.activeCustomers }}</p>
+        <h3>Active Users</h3>
+        <p>{{ stats.activeUsers }}</p>
+      </div>
+      <div class="stat-card">
+        <h3>Total Managers</h3>
+        <p>{{ stats.totalManagers }}</p>
+      </div>
+      <div class="stat-card">
+        <h3>Total Customers</h3>
+        <p>{{ stats.totalCustomers }}</p>
       </div>
     </div>
 
-    <router-view></router-view>
+    <Users />
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
-import axios from '@/utils/axios';
+import Users from '@/views/admin/Users.vue';
 
 export default {
   name: 'AdminDashboard',
+  components: { Users },
   setup() {
     const store = useStore();
     const router = useRouter();
-    const stats = ref({
-      totalUsers: 0,
-      activeCustomers: 0
-    });
+
+    const stats = computed(() => ({
+      totalUsers: store.getters['users/totalUsers'] || 0,
+      activeUsers: store.getters['users/totalActiveUsers'] || 0,
+      totalManagers: store.getters['users/totalManagers'] || 0,
+      totalCustomers: store.getters['users/totalCustomers'] || 0
+    }));
 
     const handleLogout = async () => {
-      await store.dispatch('logout');
+      await store.dispatch('auth/logout');
       router.push('/signin');
     };
 
-    const fetchStats = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const [usersRes, customersRes] = await Promise.all([
-          axios.get('/admin/users'),
-          axios.get('/admin/customers')
-        ]);
-        
-        stats.value = {
-          totalUsers: usersRes.data.length,
-          activeCustomers: customersRes.data.filter(c => c.is_active).length
-        };
+        await store.dispatch('users/fetchUsers');
       } catch (error) {
-        console.error('Error fetching stats:', error);
+        console.error('Error fetching dashboard data:', error);
       }
     };
 
-    onMounted(fetchStats);
+    onMounted(fetchDashboardData);
 
     return {
       stats,

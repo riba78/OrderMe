@@ -12,6 +12,7 @@ export default createStore({
     userRole: state => state.user?.role || '',
     isAuthenticated: state => !!state.token,
     user: state => state.user,
+    users: (state, getters, rootState, rootGetters) => rootGetters['users/allUsers'],
   },
   mutations: {
     setToken(state, token) {
@@ -48,6 +49,9 @@ export default createStore({
     },
     logout({ commit }) {
       commit('logout')
+    },
+    async fetchUsers({ dispatch }) {
+      return await dispatch('users/fetchUsers')
     },
     // Manager-specific actions
     async fetchManagedCustomers() {

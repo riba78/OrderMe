@@ -377,4 +377,222 @@ No. This error doesn't break functionality since the logout action still works c
 2. The action exists but is in the root namespace
 3. Vuex still calls the correct action but logs an error about the namespace mismatch
 
+---
+
+## Problem: Inconsistent User Data Display in Admin Dashboard and Users Management
+
+### **Symptoms**
+- Users table displays raw user data with `<pre>{{ user }}</pre>` instead of formatted columns
+- Inconsistent display of user contact information (email/phone) across different views
+- Missing or improperly formatted dates
+- Inconsistent styling for role and status badges
+- Different table layouts between AdminDashboard and Users views
+
+### **Cause**
+1. Raw user data being displayed without proper formatting
+2. Inconsistent implementation between AdminDashboard.vue and Users.vue
+3. Missing role-based display logic for contact information
+4. Inconsistent date formatting
+5. Missing or inconsistent styling for badges and actions
+
+### **Solution**
+
+1. **Standardize Table Structure**
+   ```vue
+   <!-- Common table structure for both views -->
+   <table>
+     <thead>
+       <tr>
+         <th>Contact</th>
+         <th>Role</th>
+         <th>Status</th>
+         <th>Created At</th>
+         <th>Updated At</th>
+         <th>Actions</th>
+       </tr>
+     </thead>
+     <tbody>
+       <tr v-for="user in users" :key="user.id">
+         <td>
+           <span v-if="user.role === 'customer'">{{ user.phone || 'N/A' }}</span>
+           <span v-else>{{ user.email || 'N/A' }}</span>
+         </td>
+         <!-- ... other columns ... -->
+       </tr>
+     </tbody>
+   </table>
+   ```
+
+2. **Implement Role-Based Display Logic**
+   ```javascript
+   // Consistent contact display logic
+   const displayContact = (user) => {
+     if (user.role === 'customer') {
+       return user.phone || 'N/A'
+     }
+     return user.email || 'N/A'
+   }
+   ```
+
+3. **Standardize Date Formatting**
+   ```javascript
+   // Consistent date formatting across views
+   const formatDate = (date) => {
+     if (!date) return 'N/A'
+     return new Date(date).toLocaleString('en-US', {
+       year: 'numeric',
+       month: 'short',
+       day: 'numeric',
+       hour: '2-digit',
+       minute: '2-digit'
+     })
+   }
+   ```
+
+4. **Create Reusable Components**
+   ```vue
+   <!-- components/UserTable.vue -->
+   <template>
+     <table class="users-table">
+       <!-- Common table structure -->
+     </table>
+   </template>
+
+   <script>
+   export default {
+     props: {
+       users: {
+         type: Array,
+         required: true
+       }
+     },
+     // ... common methods and styling
+   }
+   </script>
+   ```
+
+### **Prevention**
+
+1. **Create Shared Components**
+   - Extract common table structure into a reusable component
+   - Create shared utility functions for formatting
+   - Use consistent styling through shared SCSS variables
+
+2. **Implement Data Display Guidelines**
+   ```javascript
+   // guidelines.js
+   export const USER_DISPLAY_GUIDELINES = {
+     contact: {
+       customer: 'phone',
+       admin: 'email',
+       manager: 'email'
+     },
+     dateFormat: {
+       locale: 'en-US',
+       options: {
+         year: 'numeric',
+         month: 'short',
+         day: 'numeric',
+         hour: '2-digit',
+         minute: '2-digit'
+       }
+     },
+     roles: {
+       admin: { color: '#1976d2', bg: '#e3f2fd' },
+       manager: { color: '#2e7d32', bg: '#e8f5e9' },
+       customer: { color: '#f57c00', bg: '#fff3e0' }
+     }
+   }
+   ```
+
+3. **Add Type Definitions**
+   ```typescript
+   // types/user.ts
+   interface User {
+     id: string
+     email: string | null
+     phone: string | null
+     role: 'admin' | 'manager' | 'customer'
+     is_active: boolean
+     created_at: string
+     updated_at: string
+   }
+   ```
+
+4. **Documentation**
+   - Document display requirements for each user role
+   - Maintain a style guide for user data presentation
+   - Include examples of proper data formatting
+
+### **Verification**
+1. Check both AdminDashboard and Users views for consistency
+2. Verify role-based contact display (email/phone)
+3. Confirm date formatting is consistent
+4. Test with different user roles and data combinations
+5. Verify responsive design and accessibility
+
+### **Why This Works**
+- Consistent display logic across views
+- Reusable components reduce code duplication
+- Type definitions prevent display errors
+- Shared styling ensures visual consistency
+- Documentation helps maintain standards
+
+### **Additional Recommendations**
+
+1. **Create a User Display Service**
+   ```javascript
+   // services/userDisplayService.js
+   export const UserDisplayService = {
+     getContactInfo(user) {
+       return user.role === 'customer' ? user.phone : user.email
+     },
+     formatDate(date) {
+       // ... consistent date formatting
+     },
+     getRoleStyle(role) {
+       // ... consistent role styling
+     }
+   }
+   ```
+
+2. **Add Unit Tests**
+   ```javascript
+   // tests/userDisplay.test.js
+   describe('UserDisplayService', () => {
+     test('displays phone for customers', () => {
+       const customer = { role: 'customer', phone: '1234567890' }
+       expect(UserDisplayService.getContactInfo(customer)).toBe('1234567890')
+     })
+     // ... more tests
+   })
+   ```
+
+3. **Implement Error Boundaries**
+   ```vue
+   <!-- components/UserDataDisplay.vue -->
+   <template>
+     <div class="user-data">
+       <ErrorBoundary>
+         <slot :user="user" :format="formatUserData"></slot>
+       </ErrorBoundary>
+     </div>
+   </template>
+   ```
+
+4. **Add Loading States**
+   ```vue
+   <template>
+     <div class="users-table">
+       <LoadingSpinner v-if="loading" />
+       <ErrorDisplay v-else-if="error" :error="error" />
+       <table v-else>
+         <!-- ... table content ... -->
+       </table>
+     </div>
+   </template>
+   ```
+
+By following these guidelines and implementing the suggested solutions, you can maintain consistent user data display across your application and prevent similar issues in the future.
+
 --- 

@@ -3,8 +3,9 @@
 import enum
 import uuid
 from sqlalchemy import Column, Enum, Boolean, CHAR
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from .base import Base, TimestampMixing
+from .customer import Customer 
 
 class UserRole(enum.Enum):
     """Enumerated User roles with associated permissions."""
@@ -45,6 +46,12 @@ class User(Base, TimestampMixing):
         "Customer",
         foreign_keys="Customer.assigned_manager_id",
         back_populates="assigned_manager"
+    )
+    customer = relationship(
+        "Customer",
+        uselist=False,
+        backref="user",
+        primaryjoin="User.id==foreign(Customer.id)"
     )
     
     def __repr__(self):

@@ -9,6 +9,7 @@ class Customer(Base, TimestampMixing):
 
     id = Column(
         CHAR(36),
+        ForeignKey("users.id"),
         primary_key=True
     )
 

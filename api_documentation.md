@@ -11,6 +11,11 @@
 
 ## **Authentication**
 
+All endpoints except `/auth/signup` and `/auth/signin` require a valid JWT token in the Authorization header:
+```
+Authorization: Bearer <token>
+```
+
 ### **Sign Up**
 
 - **Endpoint:** `POST /auth/signup`
@@ -23,7 +28,8 @@
     ```json
     {
       "email": "user@example.com",
-      "password": "yourpassword"
+      "password": "yourpassword",
+      "role": "admin|manager|customer"
     }
     ```
 - **Response:**
@@ -83,7 +89,9 @@
       "created_at": "timestamp",
       "updated_at": "timestamp",
       "role": "admin" | "manager" | "customer",
-      "is_active": true
+      "is_active": true,
+      "email": "string",
+      "phone": "string"
     }
     ```
 
@@ -98,8 +106,11 @@
 - **Request Body:**
     ```json
     {
-      "role": "admin" | "manager" | "customer",
-      "is_active": true
+      "email": "user@example.com",
+      "password": "yourpassword",
+      "role": "admin|manager|customer",
+      "phone": "string",
+      "verification_method": "whatsapp|email|phone"
     }
     ```
 - **Response:**
@@ -110,7 +121,9 @@
       "created_at": "timestamp",
       "updated_at": "timestamp",
       "role": "admin" | "manager" | "customer",
-      "is_active": true
+      "is_active": true,
+      "email": "string",
+      "phone": "string"
     }
     ```
 
@@ -175,7 +188,9 @@
         "created_at": "timestamp",
         "updated_at": "timestamp",
         "role": "admin" | "manager" | "customer",
-        "is_active": true
+        "is_active": true,
+        "email": "string",
+        "phone": "string"
       },
       ...
     ]
@@ -204,7 +219,8 @@
         "created_at": "timestamp",
         "updated_at": "timestamp",
         "role": "customer",
-        "is_active": true
+        "is_active": true,
+        "phone": "string"
       },
       ...
     ]
@@ -378,3 +394,61 @@ const actions = {
 2. Store the returned token in localStorage
 3. The API service automatically adds the token to all subsequent requests
 4. On logout, clear the token from localStorage 
+
+## Error Responses
+
+All endpoints may return the following errors:
+
+### 400 Bad Request
+```json
+{
+    "detail": "Error message describing the validation error"
+}
+```
+
+### 401 Unauthorized
+```json
+{
+    "detail": "Not authenticated"
+}
+```
+
+### 403 Forbidden
+```json
+{
+    "detail": "Not enough permissions"
+}
+```
+
+### 404 Not Found
+```json
+{
+    "detail": "Resource not found"
+}
+```
+
+### 422 Unprocessable Entity
+```json
+{
+    "detail": [
+        {
+            "loc": ["string"],
+            "msg": "string",
+            "type": "string"
+        }
+    ]
+}
+```
+
+## Rate Limiting
+
+API endpoints are rate-limited to prevent abuse:
+- Authentication endpoints: 5 requests per minute
+- Other endpoints: 60 requests per minute
+
+Rate limit headers are included in all responses:
+```
+X-RateLimit-Limit: <limit>
+X-RateLimit-Remaining: <remaining>
+X-RateLimit-Reset: <reset_timestamp>
+```

@@ -74,11 +74,21 @@ class UserRepository(
         await self.session.refresh(user)
         return user
         
+    async def list_all(self) -> list[User]:
+        stmt = (
+            select(User)
+            .options(
+                selectinload(User.admin_manager),
+                selectinload(User.customer)
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
     # The following methods are inherited from AsyncCrudRepository:
     # - create
     # - get_by_id
     # - update
     # - delete
-    # - list_all
     
     

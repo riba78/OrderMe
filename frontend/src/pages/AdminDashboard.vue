@@ -60,7 +60,6 @@
                 v-model="searchQuery" 
                 placeholder="Search by name, email, role..."
                 class="search-input"
-                @input="handleSearch"
               />
               <button 
                 v-if="searchQuery" 
@@ -98,20 +97,23 @@
             <table v-if="filteredUsers.length > 0">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Email</th>
+                  <th>Contact</th>
                   <th>Role</th>
                   <th>Status</th>
+                  <th>Created At</th>
+                  <th>Updated At</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="user in filteredUsers" :key="user.id">
-                  <td>{{ user.name }}</td>
-                  <td>{{ user.email }}</td>
+                  <td>
+                    <span v-if="user.role === 'customer'">{{ user.phone || 'N/A' }}</span>
+                    <span v-else>{{ user.email || 'N/A' }}</span>
+                  </td>
                   <td>
                     <span class="role-badge" :class="user.role">
-                      {{ user.role.charAt(0).toUpperCase() + user.role.slice(1) }}
+                      {{ user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A' }}
                     </span>
                   </td>
                   <td>
@@ -119,24 +121,29 @@
                       {{ user.is_active ? 'Active' : 'Inactive' }}
                     </span>
                   </td>
+                  <td>{{ formatDate(user.created_at) }}</td>
+                  <td>{{ formatDate(user.updated_at) }}</td>
                   <td>
                     <div class="action-buttons">
                       <button 
                         class="icon-btn edit"
                         @click="handleEditUser(user)"
-                        aria-label="Edit user">
+                        aria-label="Edit user"
+                        title="Edit">
                         <i class="fas fa-edit"></i>
                       </button>
                       <button 
                         class="icon-btn toggle"
                         @click="handleToggleActivation(user)"
-                        :aria-label="user.is_active ? 'Deactivate user' : 'Activate user'">
+                        :aria-label="user.is_active ? 'Deactivate user' : 'Activate user'"
+                        :title="user.is_active ? 'Deactivate' : 'Activate'">
                         <i :class="user.is_active ? 'fas fa-user-slash' : 'fas fa-user-check'"></i>
                       </button>
                       <button 
                         class="icon-btn delete"
                         @click="handleDeleteUser(user)"
-                        aria-label="Delete user">
+                        aria-label="Delete user"
+                        title="Delete">
                         <i class="fas fa-trash"></i>
                       </button>
                     </div>
@@ -319,7 +326,6 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
-import { debounce } from 'lodash'
 
 export default {
   name: 'AdminDashboard',
@@ -331,8 +337,8 @@ export default {
     const showCreateCustomerModal = ref(false)
     const showEditUserModal = ref(false)
     const showConfirmModal = ref(false)
-    const users = ref([])
-    const managers = ref([])
+    const users = computed(() => store.getters['users/allUsers'])
+    const managers = computed(() => store.getters['users/managers'])
 
     const stats = computed(() => ({
       totalUsers: store.getters['users/totalUsers'] || 0,
@@ -381,13 +387,14 @@ export default {
     const filteredUsers = computed(() => {
       let result = users.value
 
-      // Text search
+      // Text search (search by name, email, phone, or role)
       if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase()
         result = result.filter(user => 
-          user.name.toLowerCase().includes(query) ||
-          user.email.toLowerCase().includes(query) ||
-          user.role.toLowerCase().includes(query)
+          (user.name && user.name.toLowerCase().includes(query)) ||
+          (user.email && user.email.toLowerCase().includes(query)) ||
+          (user.phone && user.phone.toLowerCase().includes(query)) ||
+          (user.role && user.role.toLowerCase().includes(query))
         )
       }
 
@@ -597,9 +604,16 @@ export default {
       return 'Just now'
     }
 
-    const handleSearch = debounce(() => {
-      // Debounced search handler if needed
-    }, 300)
+    const formatDate = (date) => {
+      if (!date) return 'N/A'
+      return new Date(date).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
 
     const clearSearch = () => {
       searchQuery.value = ''
@@ -640,7 +654,7 @@ export default {
       searchQuery,
       searchFilters,
       filteredUsers,
-      handleSearch,
+      formatDate,
       clearSearch
     }
   }
@@ -926,12 +940,128 @@ export default {
     }
 
     .users-table {
-      background: white;
+      background: #fff;
       border-radius: 12px;
       padding: 1.5rem;
       margin-bottom: 2.5rem;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-      width: 100%;
+      overflow-x: auto;
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+
+        th, td {
+          padding: 12px 16px;
+          text-align: left;
+          border-bottom: 1px solid #eee;
+          color: #222;
+          font-size: 15px;
+        }
+
+        th {
+          font-weight: 700;
+          color: #222;
+          background: #f3f6fa;
+          white-space: nowrap;
+        }
+
+        tr:nth-child(even) {
+          background: #fafbfc;
+        }
+
+        td {
+          vertical-align: middle;
+          background: inherit;
+        }
+      }
+
+      .role-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: capitalize;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+
+        &.admin {
+          background: #1976d2;
+          color: #fff;
+          border-color: #1976d2;
+        }
+        &.manager {
+          background: #43a047;
+          color: #fff;
+          border-color: #388e3c;
+        }
+        &.customer {
+          background: #f57c00;
+          color: #fff;
+          border-color: #f57c00;
+        }
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+
+        &.active {
+          background: #e8f5e9;
+          color: #1b5e20;
+          border-color: #43a047;
+        }
+        &.inactive {
+          background: #ffebee;
+          color: #b71c1c;
+          border-color: #c62828;
+        }
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 8px;
+
+        .icon-btn {
+          padding: 6px;
+          border: 1px solid #e0e0e0;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          background: #f3f6fa;
+
+          &.edit {
+            background: #1976d2;
+            color: #fff;
+            border-color: #1976d2;
+            &:hover { background: #1565c0; }
+          }
+          &.toggle {
+            background: #fbc02d;
+            color: #fff;
+            border-color: #fbc02d;
+            &:hover { background: #f9a825; }
+          }
+          &.delete {
+            background: #c62828;
+            color: #fff;
+            border-color: #c62828;
+            &:hover { background: #b71c1c; }
+          }
+          i { font-size: 15px; }
+        }
+      }
     }
   }
 

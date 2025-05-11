@@ -3,7 +3,7 @@
 from fastapi import HTTPException
 from typing import List
 from ..models.user import User, UserRole
-from ..schemas.user import UserCreate, UserUpdate
+from ..schemas.user import UserCreate, UserUpdate, UserResponse
 from ..repositories.interfaces.user_repository import IUserRepository
 from .crud_service import CRUDService
 
@@ -122,7 +122,7 @@ class UserService(CRUDService[User, UserCreate, UserUpdate]):
         # All other roles cannot toggle activation
         raise HTTPException(status_code=403, detail="Not authorized to toggle activation for this user")
     
-    async def list_users(self, current_user: User) -> List[User]:
+    async def list_users(self, current_user: User) -> List[UserResponse]:
         """
         List users with role-based access control.
 
@@ -132,23 +132,38 @@ class UserService(CRUDService[User, UserCreate, UserUpdate]):
         """
         # Admins can see all users
         if current_user.role == UserRole.admin:
-            return await self.list_all()
-        
-        # Managers can only see their assigned customers
-        if current_user.role == UserRole.manager:
             users = await self.list_all()
-            return [
+        # Managers can only see their assigned customers
+        elif current_user.role == UserRole.manager:
+            users = await self.list_all()
+            users = [
                 user for user in users 
                 if user.role == UserRole.customer and 
                 user.admin_manager and 
                 user.admin_manager.id == current_user.id
             ]
-        
-        # Other roles are forbidden
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized to list users"
-        )
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail="Not authorized to list users"
+            )
+        user_responses = []
+        for user in users:
+            admin_manager = user.admin_manager
+            customer = user.customer if hasattr(user, 'customer') else None
+            # For admin/manager: set email, for customer: set phone
+            email = admin_manager.email if admin_manager and admin_manager.email else None
+            phone = customer.phone if customer and customer.phone else None
+            user_responses.append(UserResponse(
+                id=user.id,
+                role=user.role,
+                is_active=user.is_active,
+                created_at=user.created_at,
+                updated_at=user.updated_at,
+                email=email,
+                phone=phone
+            ))
+        return user_responses
     
     async def list_managed_customers(self, current_user: User) -> List[User]:
         """

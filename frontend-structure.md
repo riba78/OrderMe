@@ -7,124 +7,159 @@ src/
 │
 ├── assets/                  # Static assets
 │   ├── styles/             # Global styles
+│   │   ├── _dashboard.scss # Dashboard-specific styles
 │   │   ├── _variables.scss # SCSS variables
 │   │   └── main.scss      # Main styles
-│   ├── facebook-icon.svg   # Social login icons
-│   └── google-icon.svg
+│   ├── facebook-icon.svg   # Social login icon
+│   └── google-icon.svg     # Social login icon
 │
 ├── components/             # Reusable UI components
 │   ├── Auth/              # Authentication components
-│   │   └── SignInForm.vue # Sign in form with validation
+│   │   ├── SignInForm.vue # Sign in form with validation
+│   │   └── SignUpForm.vue # Sign up form with validation
 │   └── MainNavigation.vue # Main navigation component
 │
 ├── pages/                 # Route-level views
-│   ├── Home.vue          # Landing page
-│   ├── SignIn.vue        # Sign in page
-│   └── AdminDashboard.vue # Admin dashboard
+│   ├── Home.vue           # Landing page
+│   ├── SignIn.vue         # Sign in page
+│   ├── SignUp.vue         # Sign up page
+│   ├── AdminDashboard.vue # Admin dashboard
+│   └── ManagerDashboard.vue # Manager dashboard
 │
-├── router/               # Vue Router setup
-│   └── index.js         # Routes and navigation guards
+├── views/                 # Feature-specific views
+│   └── admin/
+│       └── Users.vue      # User management view for admin
 │
-├── store/               # Vuex store
-│   └── index.js        # Store configuration with auth module
+├── router/                # Vue Router setup
+│   └── index.js           # Routes and navigation guards
 │
-├── services/           # API and business logic
-│   └── authService.js  # Authentication service
+├── store/                 # Vuex store
+│   ├── index.js           # Store configuration
+│   └── modules/
+│       └── users.js       # Users Vuex module
 │
-├── layouts/            # Layout components (prepared for future use)
+├── services/              # API and business logic
+│   ├── api.js             # Axios instance and API helpers
+│   └── authService.js     # Authentication service
 │
-├── utils/             # Utility functions (prepared for future use)
+├── layouts/               # Layout components (empty, prepared for future use)
 │
-├── App.vue            # Root component
-└── main.js           # App entry point
+├── utils/                 # Utility functions (empty, prepared for future use)
+│
+├── App.vue                # Root component
+└── main.js                # App entry point
 
 ```
+
+## Additional Files
+- `index.html` (project root): Main HTML entry point
+- `vite.config.js` (project root): Vite configuration
+- `package.json`, `package-lock.json`: Project dependencies
+- `docs/`: Project documentation (e.g., `component-creation-guide.md`)
+
+---
 
 ## Implementation Details
 
 ### Components
-Currently implemented components follow these patterns:
-
-1. **Auth Components** (`components/Auth/`)
-   - `SignInForm.vue`: Handles authentication with validation
-   - Implements loading states and error handling
-   - Uses Vuex for state management
-
-2. **Navigation** (`components/`)
-   - `MainNavigation.vue`: Main navigation component
-   - Handles routing and active states
-   - Responsive design implementation
+- **Auth Components** (`components/Auth/`)
+  - `SignInForm.vue`: Handles authentication with validation, loading states, error handling, Vuex integration
+  - `SignUpForm.vue`: Handles registration with validation, loading states, error handling
+- **Navigation** (`components/`)
+  - `MainNavigation.vue`: Main navigation, routing, active states, responsive design
 
 ### Pages
-Current page implementations:
+- **Home.vue**: Landing page, uses MainNavigation, background styling
+- **SignIn.vue**: Dedicated sign-in page, uses SignInForm, matches home styling
+- **SignUp.vue**: Dedicated sign-up page, uses SignUpForm
+- **AdminDashboard.vue**: Protected admin dashboard, user statistics, user management
+- **ManagerDashboard.vue**: Protected manager dashboard, manager-specific features
 
-1. **Home.vue**
-   - Landing page with sign-in functionality
-   - Uses MainNavigation component
-   - Implements background styling
-
-2. **SignIn.vue**
-   - Dedicated sign-in page
-   - Uses SignInForm component
-   - Matches home page styling
-
-3. **AdminDashboard.vue**
-   - Protected admin dashboard
-   - Displays user statistics
-   - Implements user management features
+### Views
+- **admin/Users.vue**: User management table, CRUD for users, modals for create/edit/delete
 
 ### Store Structure
-Current Vuex implementation:
-
-```javascript
-// store/index.js
-export default createStore({
-  state: {
-    token: localStorage.getItem('token') || '',
-    user: JSON.parse(localStorage.getItem('user') || 'null'),
-  },
-  getters: {
-    userRole: state => state.user?.role || '',
-    isAuthenticated: state => !!state.token,
-  },
-  mutations: {
-    setToken(state, token) {
-      state.token = token
-      localStorage.setItem('token', token)
-    },
-    setUser(state, user) {
-      state.user = user
-      localStorage.setItem('user', JSON.stringify(user))
-    },
-    logout(state) {
-      state.token = ''
-      state.user = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-    }
-  }
-})
-```
+- **index.js**: Vuex store config, global state, auth state, persistent storage
+- **modules/users.js**: User management Vuex module (fetch, create, update, delete users)
 
 ### Services
-Current API service implementation:
+- **api.js**: Axios instance, request/response interceptors, token handling
+- **authService.js**: Auth API calls (login, getMe)
 
-```javascript
-// services/authService.js
-import axios from 'axios'
+### Router
+- **index.js**: Route definitions, navigation guards, role-based redirects
 
-export async function login(email, password) {
-  return axios.post('/api/auth/signin', { email, password })
-}
+### Styles
+- **assets/styles/**: SCSS variables, dashboard styles, main styles
+- **assets/facebook-icon.svg**, **assets/google-icon.svg**: Social login icons
 
-export async function getMe(token) {
-  return axios.get('/api/users/me', {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
-}
-```
+### Layouts & Utils
+- **layouts/**: (empty, for future layout components)
+- **utils/**: (empty, for future utility functions)
+
+### Documentation
+- **docs/component-creation-guide.md**: Guide for creating new components
+
+---
+
+## Best Practices (Current Implementation)
+
+1. **Authentication Flow**
+   - Token-based authentication
+   - Secure storage in localStorage
+   - Protected routes with navigation guards
+
+2. **Component Organization**
+   - Single responsibility components
+   - Props validation
+   - Event handling patterns
+
+3. **State Management**
+   - Centralized Vuex store
+   - Local state when appropriate
+   - Persistent auth state
+
+4. **API Integration**
+   - Axios for HTTP requests
+   - Centralized service files
+   - Error handling patterns
+
+5. **Styling**
+   - Global SCSS variables and resets
+   - Scoped component styles
+   - BEM naming convention
+   - Responsive design
+
+---
+
+## Next Steps
+
+1. **Immediate Priorities**
+   - Implement remaining CRUD operations
+   - Add error boundaries
+   - Enhance form validation
+   - Add loading states
+
+2. **Future Enhancements**
+   - Add user management features
+   - Implement customer management
+   - Add profile settings
+   - Enhance dashboard features
+   - Populate layouts/ and utils/ with reusable code
+
+## Style Guidelines
+
+Current styling implementation:
+
+1. **Global Styles** (`assets/styles/`)
+   - Variables for consistent theming
+   - Global reset and base styles
+   - Utility classes
+
+2. **Component Styles**
+   - Scoped SCSS in components
+   - BEM naming convention
+   - Responsive design patterns
 
 ## Planned Extensions
 
@@ -143,20 +178,6 @@ export async function getMe(token) {
    - Customer management components
    - Profile components
    - Settings components
-
-## Style Guidelines
-
-Current styling implementation:
-
-1. **Global Styles** (`assets/styles/`)
-   - Variables for consistent theming
-   - Global reset and base styles
-   - Utility classes
-
-2. **Component Styles**
-   - Scoped SCSS in components
-   - BEM naming convention
-   - Responsive design patterns
 
 ## Best Practices (Current Implementation)
 

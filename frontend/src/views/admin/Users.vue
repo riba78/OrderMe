@@ -74,32 +74,35 @@
             </td>
             <td>{{ formatDate(user.created_at) }}</td>
             <td>{{ formatDate(user.updated_at) }}</td>
-            <td>
+            <td class="actions-cell">
               <div class="action-buttons">
-                <button 
-                  class="icon-btn edit"
+                <ActionButton
+                  type="edit"
+                  label="Edit"
+                  icon="fas fa-edit"
+                  size="medium"
+                  variant="solid"
+                  :aria-label="'Edit user'"
                   @click="handleEditUser(user)"
-                  aria-label="Edit user"
-                  title="Edit">
-                  <i class="fas fa-edit"></i>
-                  <span class="action-label">Edit</span>
-                </button>
-                <button 
-                  class="icon-btn toggle"
-                  @click="handleToggleActivation(user)"
+                />
+                <ActionButton
+                  type="toggle"
+                  :label="user.is_active ? 'Deactivate' : 'Activate'"
+                  :icon="user.is_active ? 'fas fa-user-slash' : 'fas fa-user-check'"
+                  size="medium"
+                  variant="solid"
                   :aria-label="user.is_active ? 'Deactivate user' : 'Activate user'"
-                  :title="user.is_active ? 'Deactivate' : 'Activate'">
-                  <i :class="user.is_active ? 'fas fa-user-slash' : 'fas fa-user-check'"></i>
-                  <span class="action-label">{{ user.is_active ? 'Deactivate' : 'Activate' }}</span>
-                </button>
-                <button 
-                  class="icon-btn delete"
+                  @click="handleToggleActivation(user)"
+                />
+                <ActionButton
+                  type="delete"
+                  label="Delete"
+                  icon="fas fa-trash"
+                  size="medium"
+                  variant="solid"
+                  :aria-label="'Delete user'"
                   @click="handleDeleteUser(user)"
-                  aria-label="Delete user"
-                  title="Delete">
-                  <i class="fas fa-trash"></i>
-                  <span class="action-label">Delete</span>
-                </button>
+                />
               </div>
             </td>
           </tr>
@@ -228,9 +231,13 @@
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 export default {
   name: 'Users',
+  components: {
+    ActionButton
+  },
   setup() {
     const store = useStore()
     const loading = ref(false)
@@ -630,55 +637,14 @@ export default {
     }
   }
 
+  .actions-cell {
+    white-space: nowrap;
+    padding: 0 8px;
+  }
+
   .action-buttons {
     display: flex;
     gap: 8px;
-    
-    .icon-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 14px;
-      min-width: 0;
-      border: 1px solid #e0e0e0;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-weight: 600;
-      font-size: 14px;
-      background: #f3f6fa;
-      box-sizing: border-box;
-      
-      &.edit {
-        background: #1976d2;
-        color: #fff;
-        border-color: #1976d2;
-        &:hover { background: #1565c0; }
-      }
-      &.toggle {
-        background: #fbc02d;
-        color: #fff;
-        border-color: #fbc02d;
-        &:hover { background: #f9a825; }
-      }
-      &.delete {
-        background: #c62828;
-        color: #fff;
-        border-color: #c62828;
-        &:hover { background: #b71c1c; }
-      }
-      i {
-        font-size: 15px;
-        margin-right: 4px;
-      }
-      .action-label {
-        color: inherit;
-        font-weight: 600;
-        font-size: 14px;
-        margin-left: 0;
-        display: inline;
-      }
-    }
   }
 }
 
@@ -842,5 +808,12 @@ export default {
       background: #218838;
     }
   }
+}
+
+.action-emoji {
+  font-size: 18px;
+  margin-right: 6px;
+  display: inline-block;
+  vertical-align: middle;
 }
 </style> 

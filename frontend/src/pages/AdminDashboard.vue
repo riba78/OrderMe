@@ -125,27 +125,33 @@
                   <td>{{ formatDate(user.updated_at) }}</td>
                   <td>
                     <div class="action-buttons">
-                      <button 
-                        class="icon-btn edit"
+                      <ActionButton
+                        type="edit"
+                        label="Edit"
+                        icon="fas fa-edit"
+                        size="medium"
+                        variant="solid"
+                        :aria-label="'Edit user'"
                         @click="handleEditUser(user)"
-                        aria-label="Edit user"
-                        title="Edit">
-                        <i class="fas fa-edit"></i>
-                      </button>
-                      <button 
-                        class="icon-btn toggle"
-                        @click="handleToggleActivation(user)"
+                      />
+                      <ActionButton
+                        type="toggle"
+                        :label="user.is_active ? 'Deactivate' : 'Activate'"
+                        :icon="user.is_active ? 'fas fa-user-slash' : 'fas fa-user-check'"
+                        size="medium"
+                        variant="solid"
                         :aria-label="user.is_active ? 'Deactivate user' : 'Activate user'"
-                        :title="user.is_active ? 'Deactivate' : 'Activate'">
-                        <i :class="user.is_active ? 'fas fa-user-slash' : 'fas fa-user-check'"></i>
-                      </button>
-                      <button 
-                        class="icon-btn delete"
+                        @click="handleToggleActivation(user)"
+                      />
+                      <ActionButton
+                        type="delete"
+                        label="Delete"
+                        icon="fas fa-trash"
+                        size="medium"
+                        variant="solid"
+                        :aria-label="'Delete user'"
                         @click="handleDeleteUser(user)"
-                        aria-label="Delete user"
-                        title="Delete">
-                        <i class="fas fa-trash"></i>
-                      </button>
+                      />
                     </div>
                   </td>
                 </tr>
@@ -326,9 +332,13 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 export default {
   name: 'AdminDashboard',
+  components: {
+    ActionButton
+  },
   setup() {
     const store = useStore()
     const router = useRouter()
@@ -1027,40 +1037,6 @@ export default {
       .action-buttons {
         display: flex;
         gap: 8px;
-
-        .icon-btn {
-          padding: 6px;
-          border: 1px solid #e0e0e0;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.2s;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 32px;
-          height: 32px;
-          background: #f3f6fa;
-
-          &.edit {
-            background: #1976d2;
-            color: #fff;
-            border-color: #1976d2;
-            &:hover { background: #1565c0; }
-          }
-          &.toggle {
-            background: #fbc02d;
-            color: #fff;
-            border-color: #fbc02d;
-            &:hover { background: #f9a825; }
-          }
-          &.delete {
-            background: #c62828;
-            color: #fff;
-            border-color: #c62828;
-            &:hover { background: #b71c1c; }
-          }
-          i { font-size: 15px; }
-        }
       }
     }
   }

@@ -45,81 +45,29 @@
 
     <!-- Users Table -->
     <div class="users-table">
-      <table v-if="filteredUsers.length > 0">
-        <thead>
-          <tr>
-            <th>Contact</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Created At</th>
-            <th>Updated At</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in filteredUsers" :key="user.id">
-            <td>
-              <span v-if="user.role === 'customer'">{{ user.phone || 'N/A' }}</span>
-              <span v-else>{{ user.email || 'N/A' }}</span>
-            </td>
-            <td>
-              <span class="role-badge" :class="user.role">
-                {{ user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A' }}
-              </span>
-            </td>
-            <td>
-              <span :class="['status-badge', user.is_active ? 'active' : 'inactive']">
-                {{ user.is_active ? 'Active' : 'Inactive' }}
-              </span>
-            </td>
-            <td>{{ formatDate(user.created_at) }}</td>
-            <td>{{ formatDate(user.updated_at) }}</td>
-            <td class="actions-cell">
-              <div class="action-buttons">
-                <ActionButton
-                  type="edit"
-                  label="Edit"
-                  icon="fas fa-edit"
-                  size="medium"
-                  variant="solid"
-                  :aria-label="'Edit user'"
-                  @click="handleEditUser(user)"
-                />
-                <ActionButton
-                  type="toggle"
-                  :label="user.is_active ? 'Deactivate' : 'Activate'"
-                  :icon="user.is_active ? 'fas fa-user-slash' : 'fas fa-user-check'"
-                  size="medium"
-                  variant="solid"
-                  :aria-label="user.is_active ? 'Deactivate user' : 'Activate user'"
-                  @click="handleToggleActivation(user)"
-                />
-                <ActionButton
-                  type="delete"
-                  label="Delete"
-                  icon="fas fa-trash"
-                  size="medium"
-                  variant="solid"
-                  :aria-label="'Delete user'"
-                  @click="handleDeleteUser(user)"
-                />
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- Empty States -->
-      <div v-else-if="searchQuery" class="empty-state">
+      <UserTable 
+        :users="filteredUsers"
+        @edit-user="handleEditUser"
+        @toggle-activation="handleToggleActivation"
+        @delete-user="handleDeleteUser"
+      />
+      <!-- Empty state logic specific to search query -->
+      <div v-if="filteredUsers.length === 0 && searchQuery" class="empty-state">
         <i class="fas fa-search" aria-hidden="true"></i>
-        <p>No users found matching your search</p>
+        <p>No users found matching your search.</p>
         <button class="action-btn" @click="clearSearch">
           Clear Search
         </button>
       </div>
-      <div v-else class="empty-state">
+      <!-- General empty state if no users and no search (UserTable shows its own default) -->
+      <!-- This one could be for when there are absolutely no users in the system, 
+           and no search query is active. UserTable handles the simple "No users found" part.
+           If a more prominent call to action is needed for a truly empty system state,
+           it can be added here, conditional on !searchQuery && !filteredUsers.length 
+      -->
+      <div v-if="!users.length && !searchQuery" class="empty-state">
         <i class="fas fa-users" aria-hidden="true"></i>
-        <p>No users found</p>
+        <p>No users have been added to the system yet.</p>
         <button class="action-btn add-user" @click="showCreateUserModal = true">
           Add Your First User
         </button>
@@ -232,11 +180,13 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import ActionButton from '@/components/common/ActionButton.vue'
+import UserTable from '@/components/common/UserTable.vue'
 
 export default {
   name: 'Users',
   components: {
-    ActionButton
+    ActionButton,
+    UserTable
   },
   setup() {
     const store = useStore()
@@ -559,99 +509,13 @@ export default {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-
-    th, td {
-      padding: 12px 16px;
-      text-align: left;
-      border-bottom: 1px solid #eee;
-      color: #222;
-      font-size: 15px;
-    }
-
-    th {
-      font-weight: 700;
-      color: #222;
-      background: #f3f6fa;
-      white-space: nowrap;
-    }
-
-    tr:nth-child(even) {
-      background: #fafbfc;
-    }
-
-    td {
-      vertical-align: middle;
-      background: inherit;
-    }
-  }
-
-  .role-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: capitalize;
-    border: 1px solid #e0e0e0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-
-    &.admin {
-      background: #1976d2;
-      color: #fff;
-      border-color: #1976d2;
-    }
-    &.manager {
-      background: #43a047;
-      color: #fff;
-      border-color: #388e3c;
-    }
-    &.customer {
-      background: #f57c00;
-      color: #fff;
-      border-color: #f57c00;
-    }
-  }
-
-  .status-badge {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    border: 1px solid #e0e0e0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-
-    &.active {
-      background: #e8f5e9;
-      color: #1b5e20;
-      border-color: #43a047;
-    }
-    &.inactive {
-      background: #ffebee;
-      color: #b71c1c;
-      border-color: #c62828;
-    }
-  }
-
-  .actions-cell {
-    white-space: nowrap;
-    padding: 0 8px;
-  }
-
-  .action-buttons {
-    display: flex;
-    gap: 8px;
-  }
 }
 
 .empty-state {
   text-align: center;
   padding: 40px;
   color: #666;
+  margin-top: 1rem;
 
   i {
     font-size: 48px;

@@ -92,7 +92,7 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-radius: 4px;
+  border-radius: 8px;
   font-weight: 600;
   transition: all 0.2s ease;
   cursor: pointer;
@@ -112,9 +112,9 @@ export default {
   }
 
   &--large {
-    padding: 12px 24px;
-    font-size: 16px;
-    min-width: 160px;
+    padding: 0.75rem 1.25rem;
+    font-size: 1rem;
+    min-width: auto;
   }
 
   // Style variants

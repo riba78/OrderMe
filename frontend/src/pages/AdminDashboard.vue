@@ -4,18 +4,30 @@
       <header class="dashboard-header">
         <h1 class="dashboard-title">Admin Dashboard</h1>
         <nav class="dashboard-actions" aria-label="Quick actions">
-          <button class="action-btn add-user" type="button" @click="showCreateUserModal = true" aria-label="Add User">
-            <i class="fas fa-user-plus" aria-hidden="true"></i>
-            Add User
-          </button>
-          <button class="action-btn add-customer" type="button" @click="showCreateCustomerModal = true" aria-label="Add Customer">
-            <i class="fas fa-user-tie" aria-hidden="true"></i>
-            Add Customer
-          </button>
-          <button class="action-btn logout-btn" type="button" @click="handleLogout" aria-label="Logout">
-            <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-            Logout
-          </button>
+          <ActionButton
+            type="add" 
+            label="Add User"
+            icon="fas fa-user-plus"
+            size="medium"
+            aria-label="Add User"
+            @click="showCreateUserModal = true"
+          />
+          <ActionButton
+            type="info"
+            label="Add Customer"
+            icon="fas fa-user-tie"
+            size="medium"
+            aria-label="Add Customer"
+            @click="showCreateCustomerModal = true"
+          />
+          <ActionButton
+            type="error"
+            label="Logout"
+            icon="fas fa-sign-out-alt"
+            size="medium"
+            aria-label="Logout"
+            @click="handleLogout"
+          />
         </nav>
       </header>
 
@@ -94,81 +106,18 @@
             </span>
           </div>
           <div class="users-table">
-            <table v-if="filteredUsers.length > 0">
-              <thead>
-                <tr>
-                  <th>Contact</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created At</th>
-                  <th>Updated At</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="user in filteredUsers" :key="user.id">
-                  <td>
-                    <span v-if="user.role === 'customer'">{{ user.phone || 'N/A' }}</span>
-                    <span v-else>{{ user.email || 'N/A' }}</span>
-                  </td>
-                  <td>
-                    <span class="role-badge" :class="user.role">
-                      {{ user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'N/A' }}
-                    </span>
-                  </td>
-                  <td>
-                    <span :class="['status-badge', user.is_active ? 'active' : 'inactive']">
-                      {{ user.is_active ? 'Active' : 'Inactive' }}
-                    </span>
-                  </td>
-                  <td>{{ formatDate(user.created_at) }}</td>
-                  <td>{{ formatDate(user.updated_at) }}</td>
-                  <td>
-                    <div class="action-buttons">
-                      <ActionButton
-                        type="edit"
-                        label="Edit"
-                        icon="fas fa-edit"
-                        size="medium"
-                        variant="solid"
-                        :aria-label="'Edit user'"
-                        @click="handleEditUser(user)"
-                      />
-                      <ActionButton
-                        type="toggle"
-                        :label="user.is_active ? 'Deactivate' : 'Activate'"
-                        :icon="user.is_active ? 'fas fa-user-slash' : 'fas fa-user-check'"
-                        size="medium"
-                        variant="solid"
-                        :aria-label="user.is_active ? 'Deactivate user' : 'Activate user'"
-                        @click="handleToggleActivation(user)"
-                      />
-                      <ActionButton
-                        type="delete"
-                        label="Delete"
-                        icon="fas fa-trash"
-                        size="medium"
-                        variant="solid"
-                        :aria-label="'Delete user'"
-                        @click="handleDeleteUser(user)"
-                      />
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div v-else-if="searchQuery" class="empty-state">
+            <UserTable 
+              :users="filteredUsers"
+              action-button-size="small"
+              @edit-user="handleEditUser"
+              @toggle-activation="handleToggleActivation"
+              @delete-user="handleDeleteUser"
+            />
+            <div v-if="filteredUsers.length === 0 && searchQuery" class="empty-state">
               <i class="fas fa-search" aria-hidden="true"></i>
-              <p>No users found matching your search</p>
+              <p>No users found matching your search criteria.</p>
               <button class="action-btn" @click="clearSearch">
                 Clear Search
-              </button>
-            </div>
-            <div v-else class="empty-state">
-              <i class="fas fa-users" aria-hidden="true"></i>
-              <p>No users found</p>
-              <button class="action-btn add-user" @click="showCreateUserModal = true">
-                Add Your First User
               </button>
             </div>
           </div>
@@ -333,11 +282,13 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
 import ActionButton from '@/components/common/ActionButton.vue'
+import UserTable from '@/components/common/UserTable.vue'
 
 export default {
   name: 'AdminDashboard',
   components: {
-    ActionButton
+    ActionButton,
+    UserTable
   },
   setup() {
     const store = useStore()
@@ -709,40 +660,6 @@ export default {
     }
   }
 
-  .action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
-    border-radius: 8px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    border: none;
-    cursor: pointer;
-
-    &.add-user {
-      background-color: #4CAF50;
-      color: white;
-      &:hover { background-color: #43A047; }
-    }
-
-    &.add-customer {
-      background-color: #2196F3;
-      color: white;
-      &:hover { background-color: #1E88E5; }
-    }
-
-    &.logout-btn {
-      background-color: #f44336;
-      color: white;
-      &:hover { background-color: #e53935; }
-    }
-
-    i {
-      font-size: 1rem;
-    }
-  }
-
   .stats-section {
     margin-bottom: 2.5rem;
 
@@ -956,88 +873,6 @@ export default {
       margin-bottom: 2.5rem;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
       overflow-x: auto;
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-
-        th, td {
-          padding: 12px 16px;
-          text-align: left;
-          border-bottom: 1px solid #eee;
-          color: #222;
-          font-size: 15px;
-        }
-
-        th {
-          font-weight: 700;
-          color: #222;
-          background: #f3f6fa;
-          white-space: nowrap;
-        }
-
-        tr:nth-child(even) {
-          background: #fafbfc;
-        }
-
-        td {
-          vertical-align: middle;
-          background: inherit;
-        }
-      }
-
-      .role-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 13px;
-        font-weight: 600;
-        text-transform: capitalize;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-
-        &.admin {
-          background: #1976d2;
-          color: #fff;
-          border-color: #1976d2;
-        }
-        &.manager {
-          background: #43a047;
-          color: #fff;
-          border-color: #388e3c;
-        }
-        &.customer {
-          background: #f57c00;
-          color: #fff;
-          border-color: #f57c00;
-        }
-      }
-
-      .status-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 13px;
-        font-weight: 600;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-
-        &.active {
-          background: #e8f5e9;
-          color: #1b5e20;
-          border-color: #43a047;
-        }
-        &.inactive {
-          background: #ffebee;
-          color: #b71c1c;
-          border-color: #c62828;
-        }
-      }
-
-      .action-buttons {
-        display: flex;
-        gap: 8px;
-      }
     }
   }
 
@@ -1045,6 +880,9 @@ export default {
     text-align: center;
     padding: 3rem 1.5rem;
     color: #666;
+    background: #fff;
+    border-radius: 12px;
+    margin-top: 1rem;
 
     i {
       font-size: 3rem;

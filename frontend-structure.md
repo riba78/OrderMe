@@ -17,6 +17,9 @@ src/
 │   ├── Auth/              # Authentication components
 │   │   ├── SignInForm.vue # Sign in form with validation
 │   │   └── SignUpForm.vue # Sign up form with validation
+│   ├── common/            # Common, generic UI components
+│   │   ├── ActionButton.vue # Versatile button component
+│   │   └── UserTable.vue    # Reusable table for displaying users
 │   └── MainNavigation.vue # Main navigation component
 │
 ├── pages/                 # Route-level views
@@ -65,6 +68,9 @@ src/
 - **Auth Components** (`components/Auth/`)
   - `SignInForm.vue`: Handles authentication with validation, loading states, error handling, Vuex integration
   - `SignUpForm.vue`: Handles registration with validation, loading states, error handling
+- **Common Components** (`components/common/`)
+  - `ActionButton.vue`: A versatile button component handling various types, styles, sizes, and states.
+  - `UserTable.vue`: Displays a list of users in a table. Receives user data as a prop and emits events for actions (edit, delete, toggle activation). Does not handle modals or data fetching itself.
 - **Navigation** (`components/`)
   - `MainNavigation.vue`: Main navigation, routing, active states, responsive design
 
@@ -72,11 +78,11 @@ src/
 - **Home.vue**: Landing page, uses MainNavigation, background styling
 - **SignIn.vue**: Dedicated sign-in page, uses SignInForm, matches home styling
 - **SignUp.vue**: Dedicated sign-up page, uses SignUpForm
-- **AdminDashboard.vue**: Protected admin dashboard, user statistics, user management
+- **AdminDashboard.vue**: Protected admin dashboard. Displays user statistics and quick actions. Uses the `UserTable.vue` component to show an overview of users and handles user actions (e.g., opening modals or navigating) in its own context.
 - **ManagerDashboard.vue**: Protected manager dashboard, manager-specific features
 
 ### Views
-- **admin/Users.vue**: User management table, CRUD for users, modals for create/edit/delete
+- **admin/Users.vue** (Consider renaming to `UserManagementView.vue` for clarity): Dedicated full-page view for comprehensive user management. Manages its own layout, modals (create/edit/confirm), search/filters, and data fetching. Uses the `UserTable.vue` component to display the list of users and handles actions from it.
 
 ### Store Structure
 - **index.js**: Vuex store config, global state, auth state, persistent storage
@@ -110,9 +116,10 @@ src/
    - Protected routes with navigation guards
 
 2. **Component Organization**
-   - Single responsibility components
-   - Props validation
-   - Event handling patterns
+   - Single responsibility components, promoting better separation of concerns (e.g., `UserTable.vue` focuses solely on table rendering).
+   - Props validation.
+   - Event handling patterns for child-to-parent communication.
+   - Reusability: Creating generic components like `UserTable.vue` and `ActionButton.vue` to be used in multiple places, reducing code duplication (DRY).
 
 3. **State Management**
    - Centralized Vuex store
@@ -187,9 +194,10 @@ Current styling implementation:
    - Protected routes with navigation guards
 
 2. **Component Organization**
-   - Single responsibility components
-   - Props validation
-   - Event handling patterns
+   - Single responsibility components, promoting better separation of concerns (e.g., `UserTable.vue` focuses solely on table rendering).
+   - Props validation.
+   - Event handling patterns for child-to-parent communication.
+   - Reusability: Creating generic components like `UserTable.vue` and `ActionButton.vue` to be used in multiple places, reducing code duplication (DRY).
 
 3. **State Management**
    - Centralized Vuex store

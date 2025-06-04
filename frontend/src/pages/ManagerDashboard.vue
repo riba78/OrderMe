@@ -3,14 +3,22 @@
     <header class="dashboard-header">
       <h1 class="dashboard-title">Manager Dashboard</h1>
       <nav class="dashboard-actions" aria-label="Quick actions">
-        <button class="action-btn" type="button" @click="showCreateCustomerModal = true" aria-label="Add Customer">
-          <i class="fas fa-user-tie" aria-hidden="true"></i>
-          Add Customer
-        </button>
-        <button class="action-btn logout-btn" type="button" @click="handleLogout" aria-label="Logout">
-          <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-          Logout
-        </button>
+        <ActionButton
+          type="info"
+          label="Add Customer"
+          icon="fas fa-user-tie"
+          size="medium"
+          aria-label="Add Customer"
+          @click="showCreateCustomerModal = true"
+        />
+        <ActionButton
+          type="error"
+          label="Logout"
+          icon="fas fa-sign-out-alt"
+          size="medium"
+          aria-label="Logout"
+          @click="handleLogout"
+        />
       </nav>
     </header>
 
@@ -90,9 +98,13 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
+import ActionButton from '@/components/common/ActionButton.vue'
 
 export default {
   name: 'ManagerDashboard',
+  components: {
+    ActionButton
+  },
   setup() {
     const store = useStore()
     const router = useRouter()

@@ -15,6 +15,8 @@ class UserCreate(UserBase):
     pass 
 
 class UserUpdate(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
     role: Optional[UserRole]
     is_active: Optional[bool]
     class Config:

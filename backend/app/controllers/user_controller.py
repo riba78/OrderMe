@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import JSONResponse
 from typing import List
+from uuid import UUID
 from ..schemas.user import UserCreate, UserResponse, UserUpdate
 from ..services.user_service import UserService
 from ..repositories.interfaces.user_repository import IUserRepository
@@ -59,6 +60,38 @@ async def create_user(
         return await service.create_user(data, current_user)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+@router.put("/{user_id_to_update}", response_model=UserResponse)
+async def update_user_details(
+    user_id_to_update: UUID,
+    data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    service: UserService = Depends(get_user_service)
+) -> UserResponse:
+    """
+    Update a user's details with role-based authorization:
+    - Admins can update any user's email, phone, role, and status.
+    - Managers can update email, phone, and status of their assigned customers only.
+      (Managers cannot change roles).
+    """
+    try:
+        updated_user = await service.update_user_with_permissions(
+            user_id_to_update=user_id_to_update,
+            update_data=data,
+            requesting_user=current_user
+        )
+        return updated_user
+    except ValueError as exc:
+        # Specific error from service layer (e.g., user not found, data validation error)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except PermissionError as exc:
+        # Specific error for authorization failure
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        # Catch-all for other unexpected errors
+        # Log this exception for debugging
+        # logger.error(f"Unexpected error updating user {user_id_to_update}: {exc}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
 
 
 

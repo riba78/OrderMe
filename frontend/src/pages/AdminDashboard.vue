@@ -109,9 +109,9 @@
             <UserTable 
               :users="filteredUsers"
               action-button-size="small"
-              @edit-user="handleEditUser"
               @toggle-activation="handleToggleActivation"
               @delete-user="handleDeleteUser"
+              @save-user-update="processUserUpdate" 
             />
             <div v-if="filteredUsers.length === 0 && searchQuery" class="empty-state">
               <i class="fas fa-search" aria-hidden="true"></i>
@@ -158,43 +158,6 @@
                 <button type="submit" class="submit-btn" :disabled="loading">
                   <i class="fas fa-spinner fa-spin" v-if="loading" aria-hidden="true"></i>
                   <span v-else>Create User</span>
-                </button>
-              </footer>
-            </form>
-          </div>
-        </div>
-
-        <!-- Edit User Modal -->
-        <div v-if="showEditUserModal" class="modal" role="dialog" aria-modal="true" aria-label="Edit User">
-          <div class="modal-content">
-            <header class="modal-header">
-              <h2>Edit User</h2>
-              <button class="close-btn" type="button" @click="showEditUserModal = false" aria-label="Close">
-                <i class="fas fa-times" aria-hidden="true"></i>
-              </button>
-            </header>
-            <form @submit.prevent="submitEditUser" class="modal-form">
-              <div class="form-group">
-                <label for="editUserName">Name</label>
-                <input type="text" id="editUserName" v-model="editingUser.name" required />
-              </div>
-              <div class="form-group">
-                <label for="editUserEmail">Email</label>
-                <input type="email" id="editUserEmail" v-model="editingUser.email" required />
-              </div>
-              <div class="form-group">
-                <label for="editUserRole">Role</label>
-                <select id="editUserRole" v-model="editingUser.role" required>
-                  <option value="user">User</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <footer class="modal-footer">
-                <button type="button" class="cancel-btn" @click="showEditUserModal = false">Cancel</button>
-                <button type="submit" class="submit-btn" :disabled="loading">
-                  <i class="fas fa-spinner fa-spin" v-if="loading" aria-hidden="true"></i>
-                  <span v-else>Update User</span>
                 </button>
               </footer>
             </form>
@@ -467,6 +430,36 @@ export default {
       }
     }
 
+    const processUserUpdate = async ({ id, data }) => {
+      loading.value = true;
+      try {
+        await store.dispatch('users/updateUser', { 
+          id,
+          data
+        });
+        await fetchDashboardData();
+        console.log(`User ${id} updated successfully with data:`, data);
+      } catch (err) {
+        console.error('--- Raw Error Object ---');
+        console.error(err);
+        console.error('--- End Raw Error Object ---');
+
+        // Previous robust logging (can be kept or simplified further after inspecting raw err)
+        if (err && err.response) {
+          console.error('API Error Details:', err.response.data);
+          console.error('API Error Status:', err.response.status);
+        } else if (err && err.request) {
+          console.error('API No Response:', err.request);
+        } else {
+          // Try to safely access message, otherwise provide a generic error string
+          const message = (err && typeof err.message === 'string') ? err.message : 'An unknown error occurred during user update.';
+          console.error('Error Message:', message);
+        }
+      } finally {
+        loading.value = false;
+      }
+    };
+
     const handleCreateCustomer = async () => {
       loading.value = true
       try {
@@ -605,6 +598,7 @@ export default {
       handleCreateUser,
       handleEditUser,
       submitEditUser,
+      processUserUpdate,
       handleCreateCustomer,
       handleToggleActivation,
       handleDeleteUser,

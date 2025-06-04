@@ -93,7 +93,7 @@ const actions = {
     commit('SET_LOADING', true)
     commit('SET_ERROR', null)
     try {
-      const response = await api.patch(`/users/${id}/`, data)
+      const response = await api.put(`/users/${id}`, data)
       await dispatch('fetchUsers')
       return response.data
     } catch (error) {

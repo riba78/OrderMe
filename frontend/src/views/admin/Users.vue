@@ -47,9 +47,9 @@
     <div class="users-table">
       <UserTable 
         :users="filteredUsers"
-        @edit-user="handleEditUser"
         @toggle-activation="handleToggleActivation"
         @delete-user="handleDeleteUser"
+        @save-user-update="processUserUpdateInUsersView" 
       />
       <!-- Empty state logic specific to search query -->
       <div v-if="filteredUsers.length === 0 && searchQuery" class="empty-state">
@@ -115,42 +115,7 @@
       </div>
     </div>
 
-    <!-- Edit User Modal -->
-    <div v-if="showEditUserModal" class="modal" role="dialog" aria-modal="true" aria-label="Edit User">
-      <div class="modal-content">
-        <header class="modal-header">
-          <h2>Edit User</h2>
-          <button class="close-btn" type="button" @click="showEditUserModal = false" aria-label="Close">
-            <i class="fas fa-times" aria-hidden="true"></i>
-          </button>
-        </header>
-        <form @submit.prevent="submitEditUser" class="modal-form">
-          <div class="form-group">
-            <label for="editUserName">Name</label>
-            <input type="text" id="editUserName" v-model="editingUser.name" required />
-          </div>
-          <div class="form-group">
-            <label for="editUserEmail">Email</label>
-            <input type="email" id="editUserEmail" v-model="editingUser.email" required />
-          </div>
-          <div class="form-group">
-            <label for="editUserRole">Role</label>
-            <select id="editUserRole" v-model="editingUser.role" required>
-              <option value="admin">Admin</option>
-              <option value="manager">Manager</option>
-              <option value="customer">Customer</option>
-            </select>
-          </div>
-          <footer class="modal-footer">
-            <button type="button" class="cancel-btn" @click="showEditUserModal = false">Cancel</button>
-            <button type="submit" class="submit-btn" :disabled="loading">
-              <i class="fas fa-spinner fa-spin" v-if="loading" aria-hidden="true"></i>
-              <span v-else>Update User</span>
-            </button>
-          </footer>
-        </form>
-      </div>
-    </div>
+    <!-- Edit User Modal - REMOVED as inline editing is now used -->
 
     <!-- Confirmation Modal -->
     <div v-if="showConfirmModal" class="modal" role="dialog" aria-modal="true" aria-label="Confirm Action">
@@ -193,7 +158,6 @@ export default {
     const loading = ref(false)
     const error = ref(null)
     const showCreateUserModal = ref(false)
-    const showEditUserModal = ref(false)
     const showConfirmModal = ref(false)
 
     // Get users from store
@@ -212,14 +176,6 @@ export default {
       email: '',
       password: '',
       role: 'user'
-    })
-
-    // Editing user form
-    const editingUser = reactive({
-      id: '',
-      name: '',
-      email: '',
-      role: ''
     })
 
     // Confirmation modal
@@ -291,34 +247,62 @@ export default {
     }
 
     const handleEditUser = (user) => {
-      Object.assign(editingUser, {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      })
-      showEditUserModal.value = true
+      // This method, tied to the old modal, is no longer directly used by UserTable for inline editing initiation.
+      // It could be repurposed if there's another context for modal-based editing.
+      // For now, commenting out as UserTable handles starting the inline edit.
+      // Object.assign(editingUser, {
+      //   id: user.id,
+      //   name: user.name,
+      //   email: user.email,
+      //   role: user.role
+      // });
+      // showEditUserModal.value = true;
+      console.warn("handleEditUser in Users.vue was called, but inline editing is primary. This handler might need removal or repurposing if the modal is fully replaced.")
     }
 
     const submitEditUser = async () => {
-      loading.value = true
-      try {
-        await store.dispatch('users/updateUser', {
-          id: editingUser.id,
-          data: {
-            name: editingUser.name,
-            email: editingUser.email,
-            role: editingUser.role
-          }
-        })
-        showEditUserModal.value = false
-      } catch (err) {
-        error.value = err.message || 'Failed to update user'
-        console.error('Error updating user:', err)
-      } finally {
-        loading.value = false
-      }
+      // This method is tied to the old modal. Inline edits are saved via processUserUpdateInUsersView.
+      // Commenting out as it's likely redundant.
+      // loading.value = true
+      // try {
+      //   await store.dispatch('users/updateUser', {
+      //     id: editingUser.id,
+      //     data: {
+      //       name: editingUser.name,
+      //       email: editingUser.email,
+      //       role: editingUser.role
+      //     }
+      //   })
+      //   showEditUserModal.value = false
+      //   await store.dispatch('users/fetchUsers') // Refresh after modal edit
+      // } catch (err) {
+      //   error.value = err.message || 'Failed to update user'
+      //   console.error('Error updating user (modal):', err)
+      // } finally {
+      //   loading.value = false
+      // }
+      console.warn("submitEditUser in Users.vue was called, likely from an old modal path. Inline saves use processUserUpdateInUsersView.")
     }
+
+    const processUserUpdateInUsersView = async ({ id, data }) => {
+      loading.value = true;
+      error.value = null;
+      try {
+        await store.dispatch('users/updateUser', { 
+          id,
+          data 
+        });
+        await store.dispatch('users/fetchUsers'); // Refresh data
+        // TODO: Show success notification
+        console.log(`User ${id} updated successfully in Users.vue with data:`, data);
+      } catch (err) {
+        error.value = err.message || 'Failed to update user via inline edit';
+        console.error('Error processing user update in Users.vue:', err);
+        // TODO: Show error notification
+      } finally {
+        loading.value = false;
+      }
+    };
 
     const handleToggleActivation = (user) => {
       confirmModal.title = `${user.is_active ? 'Deactivate' : 'Activate'} User`
@@ -394,16 +378,14 @@ export default {
       searchQuery,
       searchFilters,
       showCreateUserModal,
-      showEditUserModal,
       showConfirmModal,
       confirmModal,
       newUser,
-      editingUser,
       handleSearch,
       clearSearch,
       handleCreateUser,
       handleEditUser,
-      submitEditUser,
+      processUserUpdateInUsersView,
       handleToggleActivation,
       handleDeleteUser,
       closeConfirmModal,

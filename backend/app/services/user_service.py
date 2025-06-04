@@ -2,10 +2,12 @@
 
 from fastapi import HTTPException
 from typing import List
+from uuid import UUID
 from ..models.user import User, UserRole
 from ..schemas.user import UserCreate, UserUpdate, UserResponse
 from ..repositories.interfaces.user_repository import IUserRepository
 from .crud_service import CRUDService
+import logging # Temporary import for debugging
 
 class UserService(CRUDService[User, UserCreate, UserUpdate]):
     """Contains business rules for creating, updating and deleting users."""
@@ -191,5 +193,66 @@ class UserService(CRUDService[User, UserCreate, UserUpdate]):
             user.admin_manager and 
             user.admin_manager.id == current_user.id
         ]
+
+    async def update_user_with_permissions(
+        self,
+        user_id_to_update: UUID,
+        update_data: UserUpdate,
+        requesting_user: User
+    ) -> User:
+        """
+        Update a user's details with role-based authorization.
+        - Admins can update any user's email, phone, role, and status.
+        - Managers can update email, phone, and status of their assigned customers only.
+          (Managers cannot change user roles).
+        """
+        logging.warning(f"UserService: Attempting to update user with ID: {user_id_to_update}, type: {type(user_id_to_update)}") # Temporary log
+
+        target_user = await self.repository.get_by_id(user_id_to_update)
+        logging.warning(f"UserService: User found by repository: {target_user}") # Temporary log
+
+        if not target_user:
+            raise ValueError("User to update not found")
+
+        if requesting_user.role == UserRole.admin:
+            # Admins can update any field present in UserUpdate schema
+            # The super().update method will handle model_dump(exclude_unset=True)
+            # if it's designed to take Pydantic models.
+            updated_user = await super().update(id=user_id_to_update, data=update_data)
+            return updated_user
+
+        elif requesting_user.role == UserRole.manager:
+            if target_user.role != UserRole.customer:
+                raise PermissionError("Managers can only update customer users.")
+
+            # Check if the customer is assigned to this manager
+            if not target_user.admin_manager or target_user.admin_manager.id != requesting_user.id:
+                raise PermissionError("Managers can only update customers specifically assigned to them.")
+
+            if update_data.role is not None:
+                # Managers are not allowed to change roles at all.
+                raise PermissionError("Managers cannot change user roles.")
+
+            # Managers can only update email, phone, and is_active status
+            manager_allowed_fields = {}
+            if update_data.email is not None:
+                manager_allowed_fields['email'] = update_data.email
+            if update_data.phone is not None:
+                manager_allowed_fields['phone'] = update_data.phone
+            if update_data.is_active is not None:
+                manager_allowed_fields['is_active'] = update_data.is_active
+            
+            if not manager_allowed_fields:
+                # No fields provided that a manager is allowed to update.
+                # (e.g., payload was empty or only contained 'role')
+                # We return the target user as is, as no valid update operation can be performed.
+                return target_user
+
+            manager_safe_update_data = UserUpdate(**manager_allowed_fields)
+            updated_user = await super().update(id=user_id_to_update, data=manager_safe_update_data)
+            return updated_user
+        
+        else: # Other roles (e.g., customer, or any other defined role)
+            raise PermissionError("You do not have permission to update this user's details.")
     
     
